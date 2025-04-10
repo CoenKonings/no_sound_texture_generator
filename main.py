@@ -1,8 +1,12 @@
+import sys
 from classes import *
 
 
 if __name__ == "__main__":
-    trumpets = InstrumentGroup("trumpets", "trumpet", (58, 77), 2, 5)
+    NUM_MEASURES = int(sys.argv[1])
 
-    print(trumpets)
-    trumpets.print_instruments()
+    trumpets = InstrumentGroup("trumpets", "trumpet", (58, 77), 2, 5)
+    line = Line(76, Dynamic.P, [trumpets])
+
+    piece = Piece(70, (4, 4), NUM_MEASURES, [], [line])
+    piece.start()
