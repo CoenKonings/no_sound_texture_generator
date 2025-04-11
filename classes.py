@@ -1,73 +1,5 @@
 TIMESTEP = 0.125
 
-class Instrument:
-    """
-    The instrument class is used to track what each player can do and is doing.
-    """
-    def __init__(self, name, pitch_range, max_note_length=1.5, can_solo=False):
-        self.name = name
-        self.pitch_range = pitch_range
-        self.max_note_length = max_note_length
-        self.can_solo = can_solo
-        self.is_playing = False
-        self.play_time = 0
-
-    def __str__(self):
-        return f'[Instrument: {self.name}]'
-
-    def start_playing(self):
-        self.is_playing = True
-        print(self, "starts playing")
-
-    def stop_playing(self):
-        self.play_time = 0
-        self.is_playing = False
-        print(self, "stops playing")
-
-    def step(self):
-        self.play_time += TIMESTEP
-
-        if self.is_playing and self.play_time > self.max_note_length:
-            self.stop_playing()
-
-    def can_start_playing(self, rest_time):
-        return not self.is_playing and self.play_time > rest_time
-
-
-
-class InstrumentGroup:
-    def __init__(self, groupname, instrumentname, pitch_range, max_note_length, size, number_start = 1):
-        self.name = groupname
-        self.instruments = [
-            Instrument(
-                instrumentname + " " + str(i + number_start),
-                pitch_range,
-                max_note_length,
-                False
-            ) for i in range(size)
-        ]
-
-        self.num_playing = 0
-
-    def __str__(self):
-        return f'[Instrument group: {self.name}]'
-
-    def print_instruments(self):
-        for instrument in self.instruments:
-            print(instrument)
-
-    def step(self, rest_time, max_playing):
-        should_start_playing = self.num_playing < max_playing
-
-        for instrument in self.instruments:
-            if should_start_playing and instrument.can_start_playing(rest_time):
-                instrument.start_playing()
-                should_start_playing = False
-                self.num_playing += 1
-
-            instrument.step()
-
-
 
 class Dynamic:
     """
@@ -88,7 +20,131 @@ class Dynamic:
         self.movementdir = movementdir
 
 
-class Line:
+class Instrument:
+    """
+    The instrument class is used to track what each player can do and is doing.
+    """
+    def __init__(
+            self,
+            name,
+            pitch_range,
+            instrument_group=None,
+            max_note_length=1.5,
+            can_solo=False
+        ):
+        self.name = name
+        self.pitch_range = pitch_range
+        self.max_note_length = max_note_length
+        self.can_solo = can_solo
+        self.is_playing = False
+        self.play_time = 0
+        self.stopped_playing = False
+        self.instrument_group = instrument_group
+
+    def __str__(self):
+        return f'[Instrument: {self.name}]'
+
+    def start_playing(self):
+        self.is_playing = True
+        self.play_time = 0
+        print(self, "starts playing")
+
+    def stop_playing(self):
+        self.play_time = 0
+        self.is_playing = False
+        self.stopped_playing = True
+        print(self, "stops playing")
+
+    def step(self):
+        self.stopped_playing = False
+        self.play_time += TIMESTEP
+
+        if self.is_playing and self.play_time > self.max_note_length:
+            self.stop_playing()
+
+    def can_start_playing(self):
+        # If the instrument is not playing, play_time tracks the length of the
+        # rest.
+        ready_to_start = self.play_time > self.instrument_group.line.rest_time
+
+        return not self.is_playing and ready_to_start
+
+
+
+class InstrumentGroup:
+    def __init__(
+            self,
+            groupname,
+            instrumentname,
+            pitch_range,
+            max_note_length,
+            size,
+            line = None,
+            number_start = 1
+        ):
+        self.name = groupname
+        self.line = line
+        self.instruments = [
+            Instrument(
+                instrumentname + " " + str(i + number_start),
+                pitch_range,
+                self,
+                max_note_length,
+                False
+            ) for i in range(size)
+        ]
+
+        self.num_playing = 0
+
+    def __str__(self):
+        return f'[Instrument group: {self.name}]'
+
+    def print_instruments(self):
+        for instrument in self.instruments:
+            print(instrument)
+
+    def step(self):
+        should_start_playing = self.num_playing < self.line.max_playing
+
+        for instrument in self.instruments:
+            if should_start_playing and instrument.can_start_playing():
+                instrument.start_playing()
+                should_start_playing = False
+                self.num_playing += 1
+
+            instrument.step()
+            self.num_playing -= 1 if instrument.stopped_playing else 0
+
+    def set_texture(self, line):
+        self.line = line
+
+
+class Texture:
+    def __init__(
+            self,
+            pitch,
+            dynamic,
+            instrument_groups,
+            max_playing=1,
+            change_rate=0,
+            rest_time=1,
+            fade_time=0.5
+        ):
+        self.pitch = pitch
+        self.dynamic = dynamic
+        self.instrument_groups = instrument_groups
+        self.max_playing = max_playing
+        self.change_rate = change_rate
+        self.rest_time = rest_time
+        self.fade_time = fade_time
+
+        self.instrument_group_index = 0
+
+        for instrument_group in self.instrument_groups:
+            instrument_group.set_texture(self)
+
+
+class Line(Texture):
     """
     A line is a note that is being sustained by multiple instrument(group)s.
     Its timbre morphs by individual instruments playing louder, quieter, or the
@@ -97,31 +153,13 @@ class Line:
     A line has a pitch, a dynamic, and a group of instrument types. The change
     rate variable is used to morph the line between instrument groups.
     """
-    def __init__(
-            self,
-            pitch,
-            dynamic,
-            instrument_groups,
-            max_playing=1,
-            change_rate=0,
-            rest_time=1
-        ):
-        self.pitch = pitch
-        self.dynamic = dynamic
-        self.instrument_groups = instrument_groups
-        self.max_playing = max_playing
-        self.change_rate = change_rate
-        self.rest_time = rest_time
-
-        self.instrument_group_index = 0
 
     def __str__(self):
         return f'[Line with pitch {self.pitch}]'
 
     def step(self):
-        self.instrument_groups[
-            self.instrument_group_index
-        ].step(self.rest_time, self.max_playing)
+        active_group = self.instrument_groups[self.instrument_group_index]
+        active_group.step()
 
 
 class MusicEvent:
