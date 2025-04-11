@@ -1,3 +1,6 @@
+import math
+
+
 TIMESTEP = 0.125
 
 
@@ -188,6 +191,7 @@ class InstrumentGroup:
 
         self.num_playing = 0
         self.time_since_start = 10000
+        self.max_playing = 0
 
     def __str__(self):
         return f'[Instrument group: {self.name}]'
@@ -198,8 +202,9 @@ class InstrumentGroup:
 
     def step(self):
         should_start_playing = (
-            self.num_playing < self.texture.max_playing and
-            self.time_since_start >= self.texture.fade_time
+            self.num_playing < self.max_playing and
+            self.time_since_start >= self.texture.fade_time and
+            self.texture.allows_start_playing()
         )
 
         for instrument in self.instruments:
@@ -222,26 +227,68 @@ class Texture:
             pitch,
             dynamic,
             instrument_groups,
-            max_playing=1,
-            change_rate=0,
-            rest_time=1,
-            fade_time=0.5
+            max_playing=1
         ):
         self.pitch = pitch
         self.dynamic = Dynamic(dynamic, self)
         self.instrument_groups = instrument_groups
         self.max_playing = max_playing
-        self.change_rate = change_rate
-        self.rest_time = rest_time
-        self.fade_time = fade_time
 
         self.instrument_group_index = 0
+        self.instrument_groups[0].max_playing = self.max_playing
 
         for instrument_group in self.instrument_groups:
             instrument_group.set_texture(self)
 
-    def set_instrument_group(self, new_value):
+    def get_active_instrument_groups(self):
+        if self.instrument_group_index % 1 == 0:
+            return [self.instrument_groups[self.instrument_group_index]]
+
+        index_a = math.floor(self.instrument_group_index)
+        index_b = math.ceil(self.instrument_group_index)
+
+        return self.instrument_groups[index_a:index_b]
+
+    def set_instrument_group_index(self, new_value):
+        if new_value == self.instrument_group_index:
+            return
+
+        for group in self.get_active_instrument_groups():
+            group.max_playing = 0
+
         self.instrument_group_index = new_value
+        decimal = self.instrument_group_index % 1
+
+        if decimal == 0:
+            self.instrument_groups[self.instrument_group_index].max_playing = self.max_playing
+            return
+
+        index = math.floor(self.instrument_group_index)
+        self.instrument_groups[index].max_playing = math.ceil(self.max_playing * decimal)
+        self.instrument_groups[index + 1].max_playing = math.floor(self.max_playing * (1 - decimal))
+
+    def update_groups_max_playing(self):
+        decimal = self.instrument_group_index % 1
+
+        if decimal == 0:
+            self.instrument_groups[self.instrument_group_index].max_playing = self.max_playing
+            return
+
+        index = math.floor(self.instrument_group_index)
+        self.instrument_groups[index].max_playing = math.ceil(self.max_playing * decimal)
+        self.instrument_groups[index + 1].max_playing = math.floor(self.max_playing * (1 - decimal))
+
+    def allows_start_playing(self):
+        num_playing = 0
+
+        for instrument_group in self.instrument_groups:
+            num_playing += instrument_group.num_playing
+
+        return num_playing < self.max_playing
+
+    def set_max_playing(self, new_value):
+        self.max_playing = new_value
+        self.update_groups_max_playing()
 
 
 class Line(Texture):
@@ -253,13 +300,28 @@ class Line(Texture):
     A line has a pitch, a dynamic, and a group of instrument types. The change
     rate variable is used to morph the line between instrument groups.
     """
+    def __init__(
+            self,
+            pitch,
+            dynamic,
+            instrument_groups,
+            max_playing=1,
+            change_rate=0,
+            rest_time=1,
+            fade_time=0.5
+        ):
+
+        super().__init__(pitch, dynamic, instrument_groups, max_playing)
+        self.change_rate = change_rate
+        self.rest_time = rest_time
+        self.fade_time = fade_time
 
     def __str__(self):
         return f'[Line with pitch {self.pitch}]'
 
     def step(self):
-        active_group = self.instrument_groups[self.instrument_group_index]
-        active_group.step()
+        for instrument_group in self.instrument_groups:
+            instrument_group.step()
 
 
 class MusicEvent:
