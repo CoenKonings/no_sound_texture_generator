@@ -240,6 +240,9 @@ class Texture:
         for instrument_group in self.instrument_groups:
             instrument_group.set_texture(self)
 
+    def set_instrument_group(self, new_value):
+        self.instrument_group_index = new_value
+
 
 class Line(Texture):
     """
@@ -269,6 +272,9 @@ class MusicEvent:
         self.action = action
         self.args = args
 
+    def execute(self):
+        self.action(*self.args)
+
 
 class Piece:
     """
@@ -292,6 +298,8 @@ class Piece:
             print(".", end="")
 
     def start(self):
+        self.events.sort(key=lambda x: x.time)
+
         while self.time < self.num_measures:
             self.show()
             self.step()
@@ -299,5 +307,8 @@ class Piece:
             self.time += TIMESTEP
 
     def step(self):
+        if len(self.events) != 0 and self.time >= self.events[0].time:
+            self.events.pop(0).execute()
+
         for line in self.lines:
             line.step()
