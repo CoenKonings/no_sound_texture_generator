@@ -52,16 +52,14 @@ class Dynamic:
         print(self.parent, "reached target dynamic", end="")
 
     def step(self):
-        if not self.is_changing:
-            return
-
         if self.value == self.target_dynamic:
             self.stop_change()
             return
 
-        num_steps = self.time_to_reach_target / TIMESTEP
-        dynamic_step = (self.target_dynamic - self.start_dynamic) / num_steps
-        self.value += dynamic_step
+        if self.is_changing:
+            num_steps = self.time_to_reach_target / TIMESTEP
+            dynamic_step = (self.target_dynamic - self.start_dynamic) / num_steps
+            self.value += dynamic_step
 
 
 class Instrument:
@@ -120,9 +118,18 @@ class Instrument:
             print(self, "is stopping with", self.dynamic, end="")
         else:
             self.is_stopping = False
+            self.is_playing = False
             print(self, "has stopped", end="")
 
         self.instrument_group.num_playing -= 1
+
+    def should_stop(self):
+        max_play_time = self.max_note_length - self.instrument_group.texture.fade_time
+        return (
+            self.is_playing and
+            self.play_time > max_play_time and
+            not self.is_stopping
+        )
 
     def step(self):
         if self.play_time is not None:
@@ -134,11 +141,10 @@ class Instrument:
             self.play_time = 0
             print(self, "has stopped", end="")
 
-        if self.is_playing and self.play_time > (
-            self.max_note_length - self.instrument_group.texture.fade_time
-        ) and not self.is_stopping:
+        if self.should_stop():
             self.stop_playing()
 
+        # Dynamic is none if instrument has not started playing yet.
         if self.dynamic is not None:
             self.dynamic.step()
 
@@ -277,16 +283,17 @@ class Piece:
         self.events = events
         self.lines = lines
 
+    def show(self):
+        if self.time.is_integer():
+            print("---------", end="")
+        elif self.time % 0.25 == 0:
+            print("-", end="")
+        else:
+            print(".", end="")
+
     def start(self):
-
         while self.time < self.num_measures:
-            if self.time.is_integer():
-                print("---------", end="")
-            elif self.time % 0.25 == 0:
-                print("-", end="")
-            else:
-                print(".", end="")
-
+            self.show()
             self.step()
             print("")
             self.time += TIMESTEP
