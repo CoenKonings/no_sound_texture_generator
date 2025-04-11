@@ -15,11 +15,12 @@ class Dynamic:
     PPP, PP, P, MP, MF, F, FF, FFF = 0, 1, 2, 3, 4, 5, 6, 7
     CRESC, DECRESC, STATIC = 1, -1, 0
 
-    def __init__(self, value):
+    def __init__(self, value, parent):
         self.value = value
         self.is_changing = False
         self.target_dynamic = None
         self.start_dynamic = None
+        self.parent = parent
         self.time_to_reach_target = 0
 
     def __str__(self):
@@ -43,6 +44,25 @@ class Dynamic:
         self.start_dynamic = self.value
         self.time_to_reach_target = time
 
+    def stop_change(self):
+        self.is_changing = False
+        self.target_dynamic = None
+        self.start_dynamic = None
+        self.time_to_reach_target = 0
+        print(self.parent, "reached target dynamic", end="")
+
+    def step(self):
+        if not self.is_changing:
+            return
+
+        if self.value == self.target_dynamic:
+            self.stop_change()
+            return
+
+        num_steps = self.time_to_reach_target / TIMESTEP
+        dynamic_step = (self.target_dynamic - self.start_dynamic) / num_steps
+        self.value += dynamic_step
+
 
 class Instrument:
     """
@@ -65,7 +85,6 @@ class Instrument:
         self.instrument_group = instrument_group
         self.play_time = None
         self.dynamic = None
-        self.dynamic_change = None
 
     def __str__(self):
         return f'[Instrument: {self.name}]'
@@ -76,7 +95,7 @@ class Instrument:
         self.instrument_group.num_playing += 1
 
         if not self.dynamic:
-            self.dynamic = Dynamic(Dynamic.PPP)
+            self.dynamic = Dynamic(Dynamic.PPP, self)
 
         self.dynamic.start_change(
             self.instrument_group.texture.dynamic.value,
@@ -93,7 +112,12 @@ class Instrument:
     def stop_playing(self, skip_stopping_process=False):
         if not skip_stopping_process:
             self.is_stopping = True
-            print(self, "is stopping", end="")
+            self.dynamic.start_change(
+                Dynamic.PPP,
+                self.instrument_group.texture.fade_time
+            )
+
+            print(self, "is stopping with", self.dynamic, end="")
         else:
             self.is_stopping = False
             print(self, "has stopped", end="")
@@ -114,6 +138,9 @@ class Instrument:
             self.max_note_length - self.instrument_group.texture.fade_time
         ) and not self.is_stopping:
             self.stop_playing()
+
+        if self.dynamic is not None:
+            self.dynamic.step()
 
 
     def can_start_playing(self):
@@ -154,6 +181,7 @@ class InstrumentGroup:
         ]
 
         self.num_playing = 0
+        self.time_since_start = 10000
 
     def __str__(self):
         return f'[Instrument group: {self.name}]'
@@ -163,14 +191,20 @@ class InstrumentGroup:
             print(instrument)
 
     def step(self):
-        should_start_playing = self.num_playing < self.texture.max_playing
+        should_start_playing = (
+            self.num_playing < self.texture.max_playing and
+            self.time_since_start >= self.texture.fade_time
+        )
 
         for instrument in self.instruments:
             if should_start_playing and instrument.can_start_playing():
                 instrument.start_playing()
                 should_start_playing = False
+                self.time_since_start = 0
 
             instrument.step()
+
+        self.time_since_start += TIMESTEP
 
     def set_texture(self, texture):
         self.texture = texture
@@ -188,7 +222,7 @@ class Texture:
             fade_time=0.5
         ):
         self.pitch = pitch
-        self.dynamic = dynamic
+        self.dynamic = Dynamic(dynamic, self)
         self.instrument_groups = instrument_groups
         self.max_playing = max_playing
         self.change_rate = change_rate
