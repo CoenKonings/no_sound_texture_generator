@@ -1,4 +1,5 @@
 import math
+from copy import copy
 
 
 TIMESTEP = 0.125
@@ -15,10 +16,19 @@ class Pitch:
     def __str__(self):
         return f'[Pitch: {self.to_lilypond()}]'
 
+    def __copy__(self):
+        return type(self)(self.note, self.octave)
+
+    def __eq__(self, other):
+        return self.note == other.note and self.octave == other.octave
+
+    def __ne__(self, other):
+        return self.note != other.note or self.octave != other.octave
+
     def octave_to_lilypond(self):
         octave = self.octave - 5
 
-        if octave == 0:
+        if octave == 0 or self.note == -1:
             return ""
         elif octave < 0:
             return -octave * ","
@@ -36,13 +46,68 @@ class LilyPondNote:
         self.duration = duration
         self.events = events
 
+    def __str__(self):
+        return f'[Note {self.pitch} for {self.duration} measures]'
+
+    def can_merge(self, note_after):
+        """
+        Check if the note can merge with the given note, assuming the given
+        note comes directly after this note.
+
+        # TODO: check if events can be merged
+        """
+        return (
+            note_after is not None and
+            self.pitch == note_after.pitch and
+            self.duration == note_after.duration
+        )
+
+    def merge(self, note):
+        self.duration += note.duration
+        self.events += note.events
+
 
 class LilyPondMeasure:
     def __init__(self):
         self.notes = []
 
     def add_note(self, pitch, events=[], duration=TIMESTEP):
-        self.notes.append(LilyPondNote(pitch, events, duration))
+        self.notes.append(LilyPondNote(copy(pitch), events, duration))
+
+    def lilypond_encode(self):
+        done = False
+        i = 0
+        timescale = TIMESTEP * 2
+        time_in_measure = 0
+        merged_this_round = False
+
+        while not done:
+            current_note = self.notes[i]
+            next_note = None if i + 1 == len(self.notes) else self.notes[i + 1]
+            should_merge_notes = (time_in_measure % timescale == 0 and i < len(self.notes) and
+                current_note.can_merge(next_note))
+
+            if should_merge_notes:
+                current_note.merge(next_note)
+                self.notes.pop(i + 1)
+                merged_this_round = True
+
+            time_in_measure += current_note.duration
+            i += 1
+
+            if i >= len(self.notes):
+                i = 0
+
+                if not merged_this_round:
+                    timescale *= 2
+                else:
+                    merged_this_round = False
+
+                if timescale >= 1:
+                    done = True
+
+        for note in self.notes:
+            print(note)
 
 
 class LilyPondScore:
@@ -54,6 +119,10 @@ class LilyPondScore:
 
     def last_measure(self):
         return self.measures[-1]
+
+    def encode_lilypond(self):
+        for measure in self.measures:
+            measure.lilypond_encode()
 
 
 class Dynamic:
@@ -148,7 +217,7 @@ class Instrument:
         self.play_time = None
         self.dynamic = None
         self.score = LilyPondScore()
-        self.pitch = None
+        self.pitch = Pitch(-1, 0)
 
     def __str__(self):
         return f'[Instrument: {self.name}]'
@@ -186,7 +255,7 @@ class Instrument:
         else:
             self.is_stopping = False
             self.is_playing = False
-            self.pitch = None
+            self.pitch.note = -1
             print(self, "has stopped", end="")
 
         self.instrument_group.num_playing -= 1
@@ -207,6 +276,7 @@ class Instrument:
             self.is_stopping = False
             self.is_playing = False
             self.play_time = 0
+            self.pitch.note = -1
             print(self, "has stopped", end="")
 
         if self.should_stop():
@@ -234,6 +304,10 @@ class Instrument:
 
     def counts_as_playing(self):
         return self.is_playing
+
+    def encode_lilypond(self):
+        print("encode lilypond for", self)
+        self.score.encode_lilypond()
 
 
 class InstrumentGroup:
@@ -289,6 +363,10 @@ class InstrumentGroup:
 
     def set_texture(self, texture):
         self.texture = texture
+
+    def encode_lilypond(self):
+        for instrument in self.instruments:
+            instrument.encode_lilypond()
 
 
 class Texture:
@@ -366,6 +444,10 @@ class Texture:
     def get_pitch(self, *_):
         raise Exception("Texture get_pitch not implemented.")
 
+    def encode_lilypond(self):
+        for instrument_group in self.instrument_groups:
+            instrument_group.encode_lilypond()
+
 
 class Line(Texture):
     """
@@ -402,7 +484,7 @@ class Line(Texture):
     def get_pitch(self):
         pitch = self.pitches.pop(0)
         self.pitches.append(pitch)
-        return pitch
+        return Pitch(pitch.note, pitch.octave)
 
 
 class MusicEvent:
@@ -457,3 +539,7 @@ class Piece:
 
         for texture in self.textures:
             texture.step(start_new_measure)
+
+    def encode_lilypond(self):
+        for texture in self.textures:
+            texture.encode_lilypond()
