@@ -14,7 +14,7 @@ class Pitch:
         self.octave = octave
 
     def __str__(self):
-        return f'[Pitch: {self.to_lilypond()}]'
+        return self.to_lilypond()
 
     def __copy__(self):
         return type(self)(self.note, self.octave)
@@ -47,7 +47,7 @@ class LilyPondNote:
         self.events = events
 
     def __str__(self):
-        return f'[Note {self.pitch} for {self.duration} measures]'
+        return str(self.pitch) + str(self.duration_as_lilypond())
 
     def can_merge(self, note_after):
         """
@@ -65,6 +65,9 @@ class LilyPondNote:
     def merge(self, note):
         self.duration += note.duration
         self.events += note.events
+
+    def duration_as_lilypond(self):
+        return int(1 / self.duration)
 
 
 class LilyPondMeasure:
@@ -107,7 +110,9 @@ class LilyPondMeasure:
                     done = True
 
         for note in self.notes:
-            print(note)
+            print(note, end=" ")
+
+        print(" |")
 
 
 class LilyPondScore:
