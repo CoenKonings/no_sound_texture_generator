@@ -7,7 +7,7 @@ if __name__ == "__main__":
 
     trumpets = InstrumentGroup("trumpets", "trumpet", (58, 77), 2, 5)
     flugelhorns_1 = InstrumentGroup("flugelhorns", "flugelhorn", (58, 77), 2, 5)
-    line = Line(76, Dynamic.P, [trumpets, flugelhorns_1], 1)
+    line = Line([Pitch(4, 7)], Dynamic.P, [trumpets, flugelhorns_1], 1)
 
     piece = Piece(70, (4, 4), NUM_MEASURES, [
         MusicEvent(2, line.set_max_playing, [3]),

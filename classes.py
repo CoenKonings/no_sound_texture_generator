@@ -4,6 +4,58 @@ import math
 TIMESTEP = 0.125
 
 
+class Pitch:
+    NOTE_NAMES = ["c", "des", "d", "es", "e", "f", "ges", "g", "as", "a",
+                      "bes", "b", "r"]
+
+    def __init__(self, note, octave):
+        self.note = note
+        self.octave = octave
+
+    def __str__(self):
+        return f'[Pitch: {self.to_lilypond()}]'
+
+    def octave_to_lilypond(self):
+        octave = self.octave - 5
+
+        if octave == 0:
+            return ""
+        elif octave < 0:
+            return -octave * ","
+        else:
+            return octave * "\'"
+
+    def to_lilypond(self):
+        return Pitch.NOTE_NAMES[self.note] + self.octave_to_lilypond()
+
+
+
+class LilyPondNote:
+    def __init__(self, pitch, events=[], duration=TIMESTEP):
+        self.pitch = pitch
+        self.duration = duration
+        self.events = events
+
+
+class LilyPondMeasure:
+    def __init__(self):
+        self.notes = []
+
+    def add_note(self, pitch, events=[], duration=TIMESTEP):
+        self.notes.append(LilyPondNote(pitch, events, duration))
+
+
+class LilyPondScore:
+    def __init__(self):
+        self.measures = []
+
+    def new_measure(self):
+        self.measures.append(LilyPondMeasure())
+
+    def last_measure(self):
+        return self.measures[-1]
+
+
 class Dynamic:
     """
     The dynamic event class is used only to organize a set of constants for
@@ -64,6 +116,15 @@ class Dynamic:
             dynamic_step = (self.target_dynamic - self.start_dynamic) / num_steps
             self.value += dynamic_step
 
+    def typeof_change(self):
+        if self.is_changing:
+            if self.target_dynamic > self.start_dynamic:
+                return Dynamic.CRESC
+            else:
+                return Dynamic.DECRESC
+
+        return None
+
 
 class Instrument:
     """
@@ -86,6 +147,8 @@ class Instrument:
         self.instrument_group = instrument_group
         self.play_time = None
         self.dynamic = None
+        self.score = LilyPondScore()
+        self.pitch = None
 
     def __str__(self):
         return f'[Instrument: {self.name}]'
@@ -94,6 +157,7 @@ class Instrument:
         self.is_playing = True
         self.play_time = 0
         self.instrument_group.num_playing += 1
+        self.pitch = self.instrument_group.texture.get_pitch()
 
         if not self.dynamic:
             self.dynamic = Dynamic(Dynamic.PPP, self)
@@ -105,7 +169,7 @@ class Instrument:
 
         print(
             self,
-            "starts playing on",
+            f'starts playing {self.pitch} on',
             self.dynamic,
             end=""
         )
@@ -122,6 +186,7 @@ class Instrument:
         else:
             self.is_stopping = False
             self.is_playing = False
+            self.pitch = None
             print(self, "has stopped", end="")
 
         self.instrument_group.num_playing -= 1
@@ -134,11 +199,11 @@ class Instrument:
             not self.is_stopping
         )
 
-    def step(self):
+    def step(self, start_new_measure):
         if self.play_time is not None:
             self.play_time += TIMESTEP
 
-        if self.is_stopping and self.play_time > self.max_note_length:
+        if self.is_stopping and self.play_time > self.instrument_group.texture.fade_time:
             self.is_stopping = False
             self.is_playing = False
             self.play_time = 0
@@ -150,6 +215,11 @@ class Instrument:
         # Dynamic is none if instrument has not started playing yet.
         if self.dynamic is not None:
             self.dynamic.step()
+
+        if start_new_measure:
+            self.score.new_measure()
+
+        self.score.last_measure().add_note(self.pitch)
 
 
     def can_start_playing(self):
@@ -200,7 +270,7 @@ class InstrumentGroup:
         for instrument in self.instruments:
             print(instrument)
 
-    def step(self):
+    def step(self, start_new_measure):
         should_start_playing = (
             self.num_playing < self.max_playing and
             self.time_since_start >= self.texture.fade_time and
@@ -213,7 +283,7 @@ class InstrumentGroup:
                 should_start_playing = False
                 self.time_since_start = 0
 
-            instrument.step()
+            instrument.step(start_new_measure)
 
         self.time_since_start += TIMESTEP
 
@@ -224,12 +294,12 @@ class InstrumentGroup:
 class Texture:
     def __init__(
             self,
-            pitch,
+            pitches,
             dynamic,
             instrument_groups,
             max_playing=1
         ):
-        self.pitch = pitch
+        self.pitches = pitches
         self.dynamic = Dynamic(dynamic, self)
         self.instrument_groups = instrument_groups
         self.max_playing = max_playing
@@ -290,6 +360,12 @@ class Texture:
         self.max_playing = new_value
         self.update_groups_max_playing()
 
+    def step(self, *_):
+        raise Exception("Texture step not implemented.")
+
+    def get_pitch(self, *_):
+        raise Exception("Texture get_pitch not implemented.")
+
 
 class Line(Texture):
     """
@@ -302,7 +378,7 @@ class Line(Texture):
     """
     def __init__(
             self,
-            pitch,
+            pitches,
             dynamic,
             instrument_groups,
             max_playing=1,
@@ -311,7 +387,7 @@ class Line(Texture):
             fade_time=0.5
         ):
 
-        super().__init__(pitch, dynamic, instrument_groups, max_playing)
+        super().__init__(pitches, dynamic, instrument_groups, max_playing)
         self.change_rate = change_rate
         self.rest_time = rest_time
         self.fade_time = fade_time
@@ -319,9 +395,14 @@ class Line(Texture):
     def __str__(self):
         return f'[Line with pitch {self.pitch}]'
 
-    def step(self):
+    def step(self, start_new_measure):
         for instrument_group in self.instrument_groups:
-            instrument_group.step()
+            instrument_group.step(start_new_measure)
+
+    def get_pitch(self):
+        pitch = self.pitches.pop(0)
+        self.pitches.append(pitch)
+        return pitch
 
 
 class MusicEvent:
@@ -343,13 +424,13 @@ class Piece:
     This class is used to generate the piece. It manages the timeline and
     ensures the music is executed correctly.
     """
-    def __init__(self, tempo, time_signature, num_measures, events, lines):
+    def __init__(self, tempo, time_signature, num_measures, events, textures):
         self.time = 0  # The time in measures
         self.tempo = tempo
         self.time_signature = time_signature
         self.num_measures = num_measures
         self.events = events
-        self.lines = lines
+        self.textures = textures
 
     def show(self):
         if self.time.is_integer():
@@ -369,8 +450,10 @@ class Piece:
             self.time += TIMESTEP
 
     def step(self):
+        start_new_measure = self.time.is_integer()
+
         if len(self.events) != 0 and self.time >= self.events[0].time:
             self.events.pop(0).execute()
 
-        for line in self.lines:
-            line.step()
+        for texture in self.textures:
+            texture.step(start_new_measure)
