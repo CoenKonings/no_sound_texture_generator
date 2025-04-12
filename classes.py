@@ -45,29 +45,40 @@ class LilyPondNote:
         self.pitch = pitch
         self.duration = duration
         self.events = events
+        self.delayed_events = []
 
     def __str__(self):
-        return str(self.pitch) + str(self.duration_as_lilypond())
+        note = str(self.pitch) + str(self.duration_as_lilypond())
+        return self.delayed_events_string() + note + " ".join(self.events)
 
     def can_merge(self, note_after):
         """
         Check if the note can merge with the given note, assuming the given
         note comes directly after this note.
-
-        # TODO: check if events can be merged
         """
         return (
             note_after is not None and
             self.pitch == note_after.pitch and
-            self.duration == note_after.duration
+            self.duration == note_after.duration and
+            len(note_after.events) == 0
         )
 
     def merge(self, note):
         self.duration += note.duration
         self.events += note.events
+        self.delayed_events += note.delayed_events
 
     def duration_as_lilypond(self):
         return int(1 / self.duration)
+
+    def delayed_events_string(self):
+        events_string = ""
+        delay_time = str(self.duration_as_lilypond() * 2) + "."
+
+        for event in self.delayed_events:
+            events_string += f'\\after {delay_time} {event} '
+
+        return events_string
 
 
 class LilyPondMeasure:
@@ -129,6 +140,14 @@ class LilyPondScore:
         for measure in self.measures:
             measure.lilypond_encode()
 
+    def get_last_note(self):
+        if len(self.measures[-1].notes) != 0:
+            print("DEBUG --", self.measures[-1].notes[-1], "--")
+            return self.measures[-1].notes[-1]
+        else:
+            print("DEBUG --", self.measures[-2].notes[-1], "--")
+            return self.measures[-2].notes[-1]
+
 
 class Dynamic:
     """
@@ -153,6 +172,11 @@ class Dynamic:
         self.time_to_reach_target = 0
 
     def __str__(self):
+        return f'[Dynamic {Dynamic.value_as_string(self.value)} {
+            "moving towards " + Dynamic.value_as_string(self.target_dynamic) if self.is_changing else "static"
+        }]'
+
+    def value_as_string(value):
         dynamic_dict = {
             0: "ppp",
             1: "pp",
@@ -163,21 +187,25 @@ class Dynamic:
             6: "ff",
             7: "fff"
         }
-        return f'[Dynamic {dynamic_dict[self.value]} {
-            "moving towards " + dynamic_dict[self.target_dynamic] if self.is_changing else "static"
-        }]'
+
+        return f'\\{dynamic_dict[value]}'
 
     def start_change(self, target, time):
+        if self.is_changing:
+            self.stop_change()
+
         self.is_changing = True
         self.target_dynamic = target
         self.start_dynamic = self.value
         self.time_to_reach_target = time
+        self.parent.handle_dynamics()
 
     def stop_change(self):
         self.is_changing = False
         self.target_dynamic = None
         self.start_dynamic = None
         self.time_to_reach_target = 0
+        self.parent.handle_dynamics()
         print(self.parent, "reached target dynamic", end="")
 
     def step(self):
@@ -193,11 +221,17 @@ class Dynamic:
     def typeof_change(self):
         if self.is_changing:
             if self.target_dynamic > self.start_dynamic:
-                return Dynamic.CRESC
+                return "\\<"
             else:
-                return Dynamic.DECRESC
+                return "\\>"
 
-        return None
+        return ""
+
+    def as_lilypond(self):
+        if self.is_changing:
+            return self.typeof_change()
+        else:
+            return Dynamic.value_as_string(self.value)
 
 
 class Instrument:
@@ -221,6 +255,7 @@ class Instrument:
         self.instrument_group = instrument_group
         self.play_time = None
         self.dynamic = None
+        self.events = []
         self.score = LilyPondScore()
         self.pitch = Pitch(-1, 0)
 
@@ -235,6 +270,7 @@ class Instrument:
 
         if not self.dynamic:
             self.dynamic = Dynamic(Dynamic.PPP, self)
+            self.handle_dynamics()
 
         self.dynamic.start_change(
             self.instrument_group.texture.dynamic.value,
@@ -251,6 +287,7 @@ class Instrument:
     def stop_playing(self, skip_stopping_process=False):
         if not skip_stopping_process:
             self.is_stopping = True
+            self.play_time = 0
             self.dynamic.start_change(
                 Dynamic.PPP,
                 self.instrument_group.texture.fade_time
@@ -277,7 +314,7 @@ class Instrument:
         if self.play_time is not None:
             self.play_time += TIMESTEP
 
-        if self.is_stopping and self.play_time > self.instrument_group.texture.fade_time:
+        if self.is_stopping and self.play_time >= self.instrument_group.texture.fade_time:
             self.is_stopping = False
             self.is_playing = False
             self.play_time = 0
@@ -294,7 +331,8 @@ class Instrument:
         if start_new_measure:
             self.score.new_measure()
 
-        self.score.last_measure().add_note(self.pitch)
+        self.score.last_measure().add_note(self.pitch, self.events)
+        self.events = []
 
 
     def can_start_playing(self):
@@ -303,7 +341,7 @@ class Instrument:
         if self.play_time is None:
             return True
 
-        ready_to_start = self.play_time > self.instrument_group.texture.rest_time
+        ready_to_start = self.play_time >= self.instrument_group.texture.rest_time - TIMESTEP
 
         return not self.is_playing and ready_to_start
 
@@ -313,6 +351,15 @@ class Instrument:
     def encode_lilypond(self):
         print("encode lilypond for", self)
         self.score.encode_lilypond()
+
+    def handle_dynamics(self):
+        # Dynamics marks at a rest are added to the previous note.
+        if self.pitch.note == -1:
+            self.score.get_last_note().delayed_events.append(
+                self.dynamic.as_lilypond()
+            )
+        else:
+            self.events.append(self.dynamic.as_lilypond())
 
 
 class InstrumentGroup:
@@ -452,6 +499,9 @@ class Texture:
     def encode_lilypond(self):
         for instrument_group in self.instrument_groups:
             instrument_group.encode_lilypond()
+
+    def handle_dynamics(self):
+        pass
 
 
 class Line(Texture):

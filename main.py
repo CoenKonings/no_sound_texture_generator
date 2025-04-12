@@ -9,7 +9,7 @@ if __name__ == "__main__":
     # flugelhorns_1 = InstrumentGroup("flugelhorns", "flugelhorn", (58, 77), 2, 5)
     # line = Line([Pitch(4, 7)], Dynamic.P, [trumpets, flugelhorns_1], 1)
 
-    trumpets = InstrumentGroup("trumpets", "trumpet", (58, 77), 1, 1)
+    trumpets = InstrumentGroup("trumpets", "trumpet", (58, 77), 2, 1)
     line = Line([Pitch(4, 7)], Dynamic.P, [trumpets], 1)
 
     piece = Piece(70, (4, 4), NUM_MEASURES, [
