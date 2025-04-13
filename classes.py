@@ -1,8 +1,11 @@
 import math
 from copy import copy
+from pathlib import Path
 
 
 TIMESTEP = 0.125
+FOLDER_NAME = 'test'
+DEBUG_MODE = True
 
 
 def to_roman_numeral(num):
@@ -112,15 +115,25 @@ class LilyPondMeasure:
         self.notes.append(LilyPondNote(copy(pitch), events, duration))
 
     def lilypond_encode(self):
+        """
+        First merge the notes in this measure, then convert it to readable
+        lilypond code.
+
+        TODO    This should be split into a number of separate functions, but
+                more important features will get priority.
+        """
         done = False
         i = 0
-        timescale = TIMESTEP * 2
+        timescale = TIMESTEP * 2 # Scale at which notes will be merged.
         time_in_measure = 0
         merged_this_round = False
 
         while not done:
             current_note = self.notes[i]
             next_note = None if i + 1 == len(self.notes) else self.notes[i + 1]
+            # Notes should be merged if they can be merged and merging them
+            # will not obfuscate the count groupings and center of a measure.
+            # TODO: incorprate ties when they are properly implemented.
             should_merge_notes = (
                 time_in_measure % timescale == 0 and
                 i < len(self.notes) and
@@ -144,13 +157,15 @@ class LilyPondMeasure:
                 else:
                     merged_this_round = False
 
-                if timescale >= 1:
+                if timescale > 1:
                     done = True
 
-        for note in self.notes:
-            print(note, end=" ")
+        lilypond_string = ""
 
-        print(" |")
+        for note in self.notes:
+            lilypond_string += f'{note} '
+
+        return lilypond_string + "| "
 
 
 class LilyPondScore:
@@ -164,8 +179,12 @@ class LilyPondScore:
         return self.measures[-1]
 
     def encode_lilypond(self):
+        lilypond_string = ""
+
         for measure in self.measures:
-            measure.lilypond_encode()
+            lilypond_string += measure.lilypond_encode()
+
+        return lilypond_string
 
     def get_last_note(self):
         if len(self.measures[-1].notes) != 0:
@@ -373,11 +392,29 @@ class Instrument:
     def counts_as_playing(self):
         return self.is_playing
 
+    def get_lilypond_variable_name(self):
+        varname_list = []
+
+        for substr in self.name.split():
+            if substr.isnumeric():
+                varname_list.append(to_roman_numeral(int(substr)))
+            else:
+                varname_list.append(substr)
+
+        return "".join(varname_list)
+
     def encode_lilypond(self):
-        print("encode lilypond for", self)
-        varname = "".join([substr if not substr.isnumeric() else to_roman_numeral(int(substr)) for substr in self.name.split()])
+        print(f'encoding lilypond for {self}...')
         filename = self.name.replace(" ", "") + ".ly"
-        self.score.encode_lilypond()
+        lilypond_score = ""
+
+        if not DEBUG_MODE:
+            lilypond_score += self.get_lilypond_variable_name() + " = "
+
+        lilypond_score += "{" + self.score.encode_lilypond() + "}\n"
+
+        with open(f'{FOLDER_NAME}/{filename}', 'w+') as file:
+            file.write(lilypond_score)
 
     def handle_dynamics(self):
         # Dynamics marks at a rest are added to the previous note.
@@ -632,5 +669,7 @@ class Piece:
             texture.step(start_new_measure)
 
     def encode_lilypond(self):
+        Path(FOLDER_NAME).mkdir(exist_ok=True)
+
         for texture in self.textures:
             texture.encode_lilypond()
