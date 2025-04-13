@@ -5,6 +5,29 @@ from copy import copy
 TIMESTEP = 0.125
 
 
+def to_roman_numeral(num):
+  lookup = [
+    (1000, 'M'),
+    (900, 'CM'),
+    (500, 'D'),
+    (400, 'CD'),
+    (100, 'C'),
+    (90, 'XC'),
+    (50, 'L'),
+    (40, 'XL'),
+    (10, 'X'),
+    (9, 'IX'),
+    (5, 'V'),
+    (4, 'IV'),
+    (1, 'I'),
+  ]
+  res = ''
+  for (n, roman) in lookup:
+    (d, num) = divmod(num, n)
+    res += roman * d
+  return res
+
+
 class Pitch:
     NOTE_NAMES = ["c", "des", "d", "es", "e", "f", "ges", "g", "as", "a",
                       "bes", "b", "r"]
@@ -98,8 +121,12 @@ class LilyPondMeasure:
         while not done:
             current_note = self.notes[i]
             next_note = None if i + 1 == len(self.notes) else self.notes[i + 1]
-            should_merge_notes = (time_in_measure % timescale == 0 and i < len(self.notes) and
-                current_note.can_merge(next_note))
+            should_merge_notes = (
+                time_in_measure % timescale == 0 and
+                i < len(self.notes) and
+                current_note.duration < timescale and
+                current_note.can_merge(next_note)
+            )
 
             if should_merge_notes:
                 current_note.merge(next_note)
@@ -142,10 +169,8 @@ class LilyPondScore:
 
     def get_last_note(self):
         if len(self.measures[-1].notes) != 0:
-            print("DEBUG --", self.measures[-1].notes[-1], "--")
             return self.measures[-1].notes[-1]
         else:
-            print("DEBUG --", self.measures[-2].notes[-1], "--")
             return self.measures[-2].notes[-1]
 
 
@@ -350,6 +375,8 @@ class Instrument:
 
     def encode_lilypond(self):
         print("encode lilypond for", self)
+        varname = "".join([substr if not substr.isnumeric() else to_roman_numeral(int(substr)) for substr in self.name.split()])
+        filename = self.name.replace(" ", "") + ".ly"
         self.score.encode_lilypond()
 
     def handle_dynamics(self):
@@ -375,15 +402,24 @@ class InstrumentGroup:
         ):
         self.name = groupname
         self.texture = texture
-        self.instruments = [
-            Instrument(
-                instrument_name + " " + str(i + number_start),
+        self.instruments = []
+
+        for i in range(size):
+            name = instrument_name
+
+            # Only add number if this is the only instrument of its type
+            # NOTE: Assumes no groups of one exist if there are multiple of the
+            # same instrument.
+            if size != 1 or number_start != 1:
+                name += f' {i + number_start}'
+
+            self.instruments.append(Instrument(
+                name,
                 pitch_range,
                 self,
                 max_note_length,
                 False
-            ) for i in range(size)
-        ]
+            ))
 
         self.num_playing = 0
         self.time_since_start = 10000
