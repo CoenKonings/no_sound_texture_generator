@@ -15,7 +15,9 @@ if __name__ == "__main__":
     piece = Piece(70, (4, 4), NUM_MEASURES, [
         MusicEvent(2, line.set_max_playing, [3]),
         MusicEvent(5, line.set_instrument_group_index, [0.5]),
+        MusicEvent(3, line.dynamic.start_change, [Dynamic.FF, 2]),
         MusicEvent(7, line.set_max_playing, [5]),
+        MusicEvent(7, line.dynamic.start_change, [Dynamic.P, 2]),
         MusicEvent(9, line.set_instrument_group_index, [1])
     ], [line])
     piece.start()

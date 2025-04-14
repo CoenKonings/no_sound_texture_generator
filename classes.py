@@ -319,9 +319,12 @@ class Dynamic:
         self.time_to_reach_target = 0
 
     def __str__(self):
-        return f'[Dynamic {Dynamic.value_as_string(self.value)} {
-            "moving towards " + Dynamic.value_as_string(self.target_dynamic) if self.is_changing else "static"
-        }]'
+        movement_string = "static"
+
+        if self.is_changing:
+            movement_string = f"moving towards {Dynamic.value_as_string(self.target_dynamic)}"
+
+        return f'[Dynamic {Dynamic.value_as_string(self.value)} {movement_string}]'
 
     def value_as_string(value):
         dynamic_dict = {
@@ -335,7 +338,7 @@ class Dynamic:
             7: "fff"
         }
 
-        return f'\\{dynamic_dict[value]}'
+        return f'\\{dynamic_dict[round(value)]}'
 
     def start_change(self, target, time):
         """
@@ -708,7 +711,7 @@ class Texture:
             instrument_group.encode_lilypond()
 
     def handle_dynamics(self):
-        pass
+        raise Exception("Texture handle_dynamics not implemented.")
 
 
 class Line(Texture):
@@ -737,7 +740,7 @@ class Line(Texture):
         self.fade_time = fade_time
 
     def __str__(self):
-        return f'[Line with pitch {self.pitch}]'
+        return f'[Line with pitches {self.pitches}]'
 
     def step(self, should_start_new_measure):
         """
@@ -749,6 +752,8 @@ class Line(Texture):
                 callback, which is then passed as an argument to the instrument
                 group's step function.
         """
+        self.dynamic.step()
+
         for instrument_group in self.instrument_groups:
             instrument_group.step(should_start_new_measure)
 
@@ -761,6 +766,24 @@ class Line(Texture):
         pitch = self.pitches.pop(0)
         self.pitches.append(pitch)
         return Pitch(pitch.note, pitch.octave)
+
+    def handle_dynamics(self):
+        """
+        Handle a change in dynamics by having the instrument groups creating
+        this texture follow suit.
+        """
+        if not self.dynamic.is_changing:
+            return
+
+        for instrument_group in self.instrument_groups:
+            for instrument in instrument_group.instruments:
+                if instrument.is_playing and not instrument.is_stopping:
+                    # Change the instrument's target dynamic to this Line's
+                    # target dynamic.
+                    instrument.dynamic.start_change(
+                        self.dynamic.target_dynamic,
+                        self.dynamic.time_to_reach_target
+                    )
 
 
 class MusicEvent:
@@ -791,6 +814,8 @@ class Piece:
         self.textures = textures
 
     def show(self):
+        print("%3f" % self.time)
+
         if self.time.is_integer():
             print("---------", end="")
         elif self.time % 0.25 == 0:
