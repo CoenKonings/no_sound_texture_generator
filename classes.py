@@ -3,39 +3,59 @@ from copy import copy
 from pathlib import Path
 
 
-TIMESTEP = 0.125
-FOLDER_NAME = 'test'
+# Globals to easily edit some parameters.
+TIMESTEP = 0.125  # TODO: move to Piece class
+FOLDER_NAME = 'test'  # TODO: move to Piece.encode_lilypond parameter
 DEBUG_MODE = True
 
 
 def to_roman_numeral(num):
-  lookup = [
-    (1000, 'M'),
-    (900, 'CM'),
-    (500, 'D'),
-    (400, 'CD'),
-    (100, 'C'),
-    (90, 'XC'),
-    (50, 'L'),
-    (40, 'XL'),
-    (10, 'X'),
-    (9, 'IX'),
-    (5, 'V'),
-    (4, 'IV'),
-    (1, 'I'),
-  ]
-  res = ''
-  for (n, roman) in lookup:
-    (d, num) = divmod(num, n)
-    res += roman * d
-  return res
+    """
+    Rewrite an integer as a roman numeral.
+
+    @param num:   An integer.
+    @returns:     A string containing the roman numeral representation of num.
+    """
+    lookup = [
+        (1000, 'M'),
+        (900, 'CM'),
+        (500, 'D'),
+        (400, 'CD'),
+        (100, 'C'),
+        (90, 'XC'),
+        (50, 'L'),
+        (40, 'XL'),
+        (10, 'X'),
+        (9, 'IX'),
+        (5, 'V'),
+        (4, 'IV'),
+        (1, 'I'),
+    ]
+    res = ''
+    for (n, roman) in lookup:
+        (d, num) = divmod(num, n)
+        res += roman * d
+    return res
 
 
 class Pitch:
+    """
+    A pitch represented as a note and an octave. Notes are represented as a
+    number from 0 to 11, representing notes C, C#, D, etc, ignoring enharmonic
+    spellings. Note number -1 represents a rest. The octave is represented as a
+    number, where 0 is the sub-contra octave. For example, Pitch(0, 5) is
+    middle C.
+    """
     NOTE_NAMES = ["c", "des", "d", "es", "e", "f", "ges", "g", "as", "a",
                       "bes", "b", "r"]
 
     def __init__(self, note, octave):
+        """
+        Initialize a new Pitch.
+
+        @param note:    A number from 0 to 11 for C, C#, etc, or -1 for a rest.
+        @param octave:  The octave number, where 0 is the sub-contra octave.
+        """
         self.note = note
         self.octave = octave
 
@@ -52,7 +72,18 @@ class Pitch:
         return self.note != other.note or self.octave != other.octave
 
     def octave_to_lilypond(self):
-        octave = self.octave - 5
+        """
+        Returns a string containing this Pitch's octave in lilypond notation,
+        where the small octave is represented with the empty string, a
+        comma is added for each octave below the small octave and an apostrophe
+        is added for each octave above the small octave. For example, the
+        octave containing middle c would be represented by "\'", and the
+        contra octave is represented by ",,".
+
+        @returns:   A string containing this Pitch's octave in lilypond
+                    notation.
+        """
+        octave = self.octave - 4
 
         if octave == 0 or self.note == -1:
             return ""
@@ -62,11 +93,22 @@ class Pitch:
             return octave * "\'"
 
     def to_lilypond(self):
+        """
+        Write this Pitch in LilyPond notation. For example, middle C is
+        represented as "c\'", and the D in the sub-contra octave is represented
+        as "d,,,".
+
+        @returns:   A string representing this Pitch in LilyPond notation.
+        """
         return Pitch.NOTE_NAMES[self.note] + self.octave_to_lilypond()
 
 
 
 class LilyPondNote:
+    """
+    This class is used to track notes' pitch, duration and events such as ties
+    and changes in dynamics.
+    """
     def __init__(self, pitch, events=[], duration=TIMESTEP):
         self.pitch = pitch
         self.duration = duration
@@ -81,6 +123,8 @@ class LilyPondNote:
         """
         Check if the note can merge with the given note, assuming the given
         note comes directly after this note.
+
+        TODO:   Check for ties.
         """
         return (
             note_after is not None and
@@ -90,14 +134,37 @@ class LilyPondNote:
         )
 
     def merge(self, note):
+        """
+        Merge this and the given note by adding the given note's duration to
+        this note, and merging their events.
+        TODO:   Properly handle ties.
+        """
         self.duration += note.duration
         self.events += note.events
         self.delayed_events += note.delayed_events
 
     def duration_as_lilypond(self):
+        """
+        Return an integer representing this note's duration (tracked in
+        fractions of a measure, e.g. 0.25 for a quarter note) in LilyPond
+        notation (where a quarter note is written as 4, an eighth note as 8,
+        a sixteenth note as 16, etc.).
+
+        @returns:   An integer representing this note's duration in LilyPond
+                    notation.
+        """
         return int(1 / self.duration)
 
     def delayed_events_string(self):
+        """
+        Delayed events happen at the end of a note, instead of the beginning.
+        This is done by using LilyPond's after command, with a duration of 3/4
+        of this note's duration. Example use case: a "fade out" at the end of
+        a note. Using a delayed event instead of adding the dynamic to the next
+        note prevents a rest having a dynamic.
+
+        @returns    The event formatted using LilyPond's "after" command.
+        """
         events_string = ""
         delay_time = str(self.duration_as_lilypond() * 2) + "."
 
@@ -108,10 +175,16 @@ class LilyPondNote:
 
 
 class LilyPondMeasure:
+    """
+    This class tracks the music at meso level.
+    """
     def __init__(self):
         self.notes = []
 
     def add_note(self, pitch, events=[], duration=TIMESTEP):
+        """
+        Add a new note to this measure.
+        """
         self.notes.append(LilyPondNote(copy(pitch), events, duration))
 
     def lilypond_encode(self):
@@ -128,6 +201,8 @@ class LilyPondMeasure:
         time_in_measure = 0
         merged_this_round = False
 
+        # Merge notes if possible. Ensure eighth note groupings and the center
+        # of the measure remain visible.
         while not done:
             current_note = self.notes[i]
             next_note = None if i + 1 == len(self.notes) else self.notes[i + 1]
@@ -160,25 +235,41 @@ class LilyPondMeasure:
                 if timescale > 1:
                     done = True
 
+        # This is where the actual encoding begins.
+        # TODO: everything above this point should be a separate function.
         lilypond_string = ""
 
         for note in self.notes:
             lilypond_string += f'{note} '
 
-        return lilypond_string + "| "
+        return lilypond_string + "| "  # Add barline at the end of the measure.
 
 
 class LilyPondScore:
+    """
+    This class is used to track all music played by one instrument.
+    """
     def __init__(self):
         self.measures = []
 
     def new_measure(self):
+        """
+        Add a new, empty measure to this score.
+        """
         self.measures.append(LilyPondMeasure())
 
     def last_measure(self):
+        """
+        Helper function for legibility. Returns the last measure in this score.
+        """
         return self.measures[-1]
 
     def encode_lilypond(self):
+        """
+        Get a string representing this score in LilyPond notation.
+
+        @returns:   A string containing this score in LilyPond notation.
+        """
         lilypond_string = ""
 
         for measure in self.measures:
@@ -235,6 +326,16 @@ class Dynamic:
         return f'\\{dynamic_dict[value]}'
 
     def start_change(self, target, time):
+        """
+        Start a dynamic change, going from the current dynamic to the target
+        dynamic, either by gradual (de)crescendo (time > 0) or sudden change
+        (time == 0).
+
+        @param target:  The target dynamic value, represented as one of the
+                        Dynamic class's constants.
+        @param time:    The time the change should take in measures (e.g. a
+                        quarter note is 0.25, a dotted whole note is 1.5.)
+        """
         if self.is_changing:
             self.stop_change()
 
@@ -245,6 +346,11 @@ class Dynamic:
         self.parent.handle_dynamics()
 
     def stop_change(self):
+        """
+        Stop any dynamic change. This can be used both when a change's target
+        dynamic was reached or when a new change in dynamics was started before
+        the target was reached.
+        """
         self.is_changing = False
         self.target_dynamic = None
         self.start_dynamic = None
@@ -253,6 +359,10 @@ class Dynamic:
         print(self.parent, "reached target dynamic", end="")
 
     def step(self):
+        """
+        Perform a simulation step by continuing a change that was started
+        before, or by stopping change if the target dynamic was reached.
+        """
         if self.value == self.target_dynamic:
             self.stop_change()
             return
@@ -262,7 +372,15 @@ class Dynamic:
             dynamic_step = (self.target_dynamic - self.start_dynamic) / num_steps
             self.value += dynamic_step
 
-    def typeof_change(self):
+    def change_as_lilypond(self):
+        """
+        Encode an ongoing change in dynamics in LilyPond notation: \< for a
+        crescendo, \> for a decrescendo, or nothing if no gradual change is
+        taking place.
+
+        @returns:   The current ongoing change (crescendo, decrescendo, none)
+                    in LilyPond notation.
+        """
         if self.is_changing:
             if self.target_dynamic > self.start_dynamic:
                 return "\\<"
@@ -273,7 +391,7 @@ class Dynamic:
 
     def as_lilypond(self):
         if self.is_changing:
-            return self.typeof_change()
+            return self.change_as_lilypond()
         else:
             return Dynamic.value_as_string(self.value)
 

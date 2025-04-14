@@ -7,7 +7,7 @@ if __name__ == "__main__":
 
     trumpets = InstrumentGroup("trumpets", "trumpet", (58, 77), 2, 5)
     flugelhorns_1 = InstrumentGroup("flugelhorns", "flugelhorn", (58, 77), 2, 5)
-    line = Line([Pitch(4, 7)], Dynamic.P, [trumpets, flugelhorns_1], 1)
+    line = Line([Pitch(4, 6)], Dynamic.P, [trumpets, flugelhorns_1], 1)
 
     # trumpets = InstrumentGroup("trumpets", "trumpet", (58, 77), 2, 1)
     # line = Line([Pitch(4, 7)], Dynamic.P, [trumpets], 1)
