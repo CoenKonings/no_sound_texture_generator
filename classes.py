@@ -1,3 +1,15 @@
+"""
+Contains all classes needed to generate the LilyPond notation of the textures
+in No Sound, a WIP piece for fanfare orchestra.
+
+TODO
+- Implement dynamic change for Line texture.
+- Move texture-specific behaviour into a callback, which is then passed to the
+  instruments' and instrument groups' step function.
+- Cleanup (refer to TODOs dotted throughout this file)
+- Implement semitone cluster texture.
+"""
+
 import math
 from copy import copy
 from pathlib import Path
@@ -472,7 +484,7 @@ class Instrument:
             not self.is_stopping
         )
 
-    def step(self, start_new_measure):
+    def step(self, should_start_new_measure):
         # NOTE: This function now contains the algorithm for the Line texture.
         # When implementing another texture, change this function to take a
         # callback for the required behaviour.
@@ -493,7 +505,7 @@ class Instrument:
         if self.dynamic is not None:
             self.dynamic.step()
 
-        if start_new_measure:
+        if should_start_new_measure:
             self.score.new_measure()
 
         self.score.last_measure().add_note(self.pitch, self.events)
@@ -590,7 +602,7 @@ class InstrumentGroup:
         for instrument in self.instruments:
             print(instrument)
 
-    def step(self, start_new_measure):
+    def step(self, should_start_new_measure):
         # NOTE: This function now contains the algorithm for the Line texture.
         # When implementing another texture, change this function to take a
         # callback for the required behaviour.
@@ -606,7 +618,7 @@ class InstrumentGroup:
                 should_start_playing = False
                 self.time_since_start = 0
 
-            instrument.step(start_new_measure)
+            instrument.step(should_start_new_measure)
 
         self.time_since_start += TIMESTEP
 
@@ -727,18 +739,18 @@ class Line(Texture):
     def __str__(self):
         return f'[Line with pitch {self.pitch}]'
 
-    def step(self, start_new_measure):
+    def step(self, should_start_new_measure):
         """
         Perform a timestep in the piece.
 
-        @param start_new_measure:   True on the first step of a new measure.
+        @param should_start_new_measure:   True on the first step of a new measure.
 
         TODO:   Move the behaviour specific to this type of Texture into a
                 callback, which is then passed as an argument to the instrument
                 group's step function.
         """
         for instrument_group in self.instrument_groups:
-            instrument_group.step(start_new_measure)
+            instrument_group.step(should_start_new_measure)
 
     def get_pitch(self):
         """
@@ -796,13 +808,14 @@ class Piece:
             self.time += TIMESTEP
 
     def step(self):
-        start_new_measure = self.time.is_integer()
+        # Time is measured in bars/measures.
+        should_start_new_measure = self.time.is_integer()
 
         if len(self.events) != 0 and self.time >= self.events[0].time:
             self.events.pop(0).execute()
 
         for texture in self.textures:
-            texture.step(start_new_measure)
+            texture.step(should_start_new_measure)
 
     def encode_lilypond(self):
         Path(FOLDER_NAME).mkdir(exist_ok=True)
