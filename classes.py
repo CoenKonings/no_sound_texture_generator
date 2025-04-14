@@ -728,10 +728,24 @@ class Line(Texture):
         return f'[Line with pitch {self.pitch}]'
 
     def step(self, start_new_measure):
+        """
+        Perform a timestep in the piece.
+
+        @param start_new_measure:   True on the first step of a new measure.
+
+        TODO:   Move the behaviour specific to this type of Texture into a
+                callback, which is then passed as an argument to the instrument
+                group's step function.
+        """
         for instrument_group in self.instrument_groups:
             instrument_group.step(start_new_measure)
 
     def get_pitch(self):
+        """
+        Get the next pitch to be performed for this texture.
+
+        @returns:   A Pitch object.
+        """
         pitch = self.pitches.pop(0)
         self.pitches.append(pitch)
         return Pitch(pitch.note, pitch.octave)
