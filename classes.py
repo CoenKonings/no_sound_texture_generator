@@ -771,12 +771,6 @@ class Line(Texture):
 
         for instrument_group in self.instrument_groups:
             instrument_group.step(should_start_new_measure)
-            if "trumpet" in instrument_group.name:
-                print("")
-                print("-------------------- DEBUG:")
-                print(self.allows_start_playing())
-                print(instrument_group.num_playing)
-                print("-------------------")
 
     def get_pitch(self):
         """
@@ -796,6 +790,7 @@ class Line(Texture):
 
         for instrument_group in self.instrument_groups:
             for instrument in instrument_group.instruments:
+
                 if instrument.is_playing and not instrument.is_stopping:
                     # Change the instrument's target dynamic to this Line's
                     # target dynamic.
@@ -861,7 +856,7 @@ class Piece:
         # Time is measured in bars/measures.
         should_start_new_measure = self.time.is_integer()
 
-        if len(self.events) != 0 and self.time >= self.events[0].time:
+        while len(self.events) != 0 and self.time >= self.events[0].time:
             self.events.pop(0).execute()
 
         for texture in self.textures:
