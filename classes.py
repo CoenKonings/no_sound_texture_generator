@@ -473,6 +473,9 @@ class Instrument:
         )
 
     def step(self, start_new_measure):
+        # NOTE: This function now contains the algorithm for the Line texture.
+        # When implementing another texture, change this function to take a
+        # callback for the required behaviour.
         if self.play_time is not None:
             self.play_time += TIMESTEP
 
@@ -588,6 +591,9 @@ class InstrumentGroup:
             print(instrument)
 
     def step(self, start_new_measure):
+        # NOTE: This function now contains the algorithm for the Line texture.
+        # When implementing another texture, change this function to take a
+        # callback for the required behaviour.
         should_start_playing = (
             self.num_playing < self.max_playing and
             self.time_since_start >= self.texture.fade_time and
