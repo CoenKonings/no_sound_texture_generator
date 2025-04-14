@@ -654,24 +654,22 @@ class Texture:
             group.max_playing = 0
 
         self.instrument_group_index = new_value
-        decimal = self.instrument_group_index % 1
-
-        if decimal == 0:
-            self.instrument_groups[self.instrument_group_index].max_playing = self.max_playing
-            return
-
-        index = math.floor(self.instrument_group_index)
-        self.instrument_groups[index].max_playing = math.ceil(self.max_playing * decimal)
-        self.instrument_groups[index + 1].max_playing = math.floor(self.max_playing * (1 - decimal))
+        self.update_groups_max_playing()
 
     def update_groups_max_playing(self):
         decimal = self.instrument_group_index % 1
 
+        # If the index has no decimal numbers, all instruments should be played
+        # by the same group.
         if decimal == 0:
             self.instrument_groups[self.instrument_group_index].max_playing = self.max_playing
             return
 
         index = math.floor(self.instrument_group_index)
+        # If 50/50, favour the first instrument group.
+        # TODO: If the calculation below results in a number larger than the
+        #       size of the group, have the exceeding amount "overflow" into
+        #       adjacent groups.
         self.instrument_groups[index].max_playing = math.ceil(self.max_playing * decimal)
         self.instrument_groups[index + 1].max_playing = math.floor(self.max_playing * (1 - decimal))
 
