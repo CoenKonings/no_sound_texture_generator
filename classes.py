@@ -487,7 +487,7 @@ class Instrument:
             not self.is_stopping
         )
 
-    def step(self, should_start_new_measure):
+    def step(self, should_start_new_measure, replace_last_note=False):
         # NOTE: This function now contains the algorithm for the Line texture.
         # When implementing another texture, change this function to take a
         # callback for the required behaviour.
@@ -511,7 +511,12 @@ class Instrument:
         if should_start_new_measure:
             self.score.new_measure()
 
-        self.score.last_measure().add_note(self.pitch, self.events)
+        if replace_last_note:
+            self.score.last_measure().notes.pop(-1)
+            self.score.last_measure().add_note(self.pitch, self.events)
+        else:
+            self.score.last_measure().add_note(self.pitch, self.events)
+
         self.events = []
 
 
@@ -521,9 +526,9 @@ class Instrument:
         if self.play_time is None:
             return True
 
-        ready_to_start = self.play_time >= self.instrument_group.texture.rest_time - TIMESTEP
+        ready_to_start = self.play_time >= self.instrument_group.texture.rest_time
 
-        return not self.is_playing and ready_to_start
+        return ready_to_start and not self.is_playing
 
     def counts_as_playing(self):
         return self.is_playing
@@ -605,23 +610,33 @@ class InstrumentGroup:
         for instrument in self.instruments:
             print(instrument)
 
-    def step(self, should_start_new_measure):
-        # NOTE: This function now contains the algorithm for the Line texture.
-        # When implementing another texture, change this function to take a
-        # callback for the required behaviour.
-        should_start_playing = (
+    def should_start_playing(self):
+        return (
             self.num_playing < self.max_playing and
             self.time_since_start >= self.texture.fade_time and
             self.texture.allows_start_playing()
         )
 
-        for instrument in self.instruments:
-            if should_start_playing and instrument.can_start_playing():
-                instrument.start_playing()
-                should_start_playing = False
-                self.time_since_start = 0
+    def step(self, should_start_new_measure):
+        # NOTE: This function now contains the algorithm for the Line texture.
+        # When implementing another texture, change this function to take a
+        # callback for the required behaviour.
 
+        # TODO: should_start_playing wordt berekend voor de simulatiestap, wat
+        #       ervoor zorgt dat instrumenten 1 tijdstap te laat beginnen met
+        #       spelen.
+
+        for instrument in self.instruments:
             instrument.step(should_start_new_measure)
+
+        if self.should_start_playing():
+            for instrument in self.instruments:
+                if instrument.can_start_playing():
+                    instrument.start_playing()
+                    instrument.step(False, True)
+                    self.time_since_start = 0
+                    break
+
 
         self.time_since_start += TIMESTEP
 
@@ -756,6 +771,12 @@ class Line(Texture):
 
         for instrument_group in self.instrument_groups:
             instrument_group.step(should_start_new_measure)
+            if "trumpet" in instrument_group.name:
+                print("")
+                print("-------------------- DEBUG:")
+                print(self.allows_start_playing())
+                print(instrument_group.num_playing)
+                print("-------------------")
 
     def get_pitch(self):
         """
@@ -772,18 +793,22 @@ class Line(Texture):
         Handle a change in dynamics by having the instrument groups creating
         this texture follow suit.
         """
-        if not self.dynamic.is_changing:
-            return
 
         for instrument_group in self.instrument_groups:
             for instrument in instrument_group.instruments:
                 if instrument.is_playing and not instrument.is_stopping:
                     # Change the instrument's target dynamic to this Line's
                     # target dynamic.
-                    instrument.dynamic.start_change(
-                        self.dynamic.target_dynamic,
-                        self.dynamic.time_to_reach_target
-                    )
+                    if self.dynamic.is_changing:
+                        instrument.dynamic.start_change(
+                            self.dynamic.target_dynamic,
+                            self.dynamic.time_to_reach_target
+                        )
+                    else:
+                        instrument.dynamic.start_change(
+                            self.dynamic.value,
+                            self.fade_time
+                        )
 
 
 class MusicEvent:
@@ -814,7 +839,7 @@ class Piece:
         self.textures = textures
 
     def show(self):
-        print("%3f" % self.time)
+        print("%3f" % self.time, end="")
 
         if self.time.is_integer():
             print("---------", end="")
