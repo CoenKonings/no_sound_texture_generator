@@ -1,0 +1,5 @@
+# No Sound - Texture Generator
+This is the algorithm I'm using to generate musical textures for my upcoming piece for concert fanfare, No Sound. The program helps me manage the score for complex textures in large ensembles, and ensures I give every musician enough time to breathe in between long notes. Most importantly, it ensures consistency in instrument groups' playing when handling collective changes in dynamics, which is an important part of the piece.
+
+## Usage
+The program's entry point is `main.py`. It expects the number of measures to be generated as a command-line argument. As of right now, any other structural parameters and musical events should be added in the source code in `main.py`. This program was written to generate music notation for a texture in a piece that has largely been composed already; as such, user friendliness is outside the scope of this project. If I ever revisit this type of musical gesture in a future piece, I may consider adding a CLI and the option to generate MIDI, so this can be used as a compositional tool as well.
