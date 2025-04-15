@@ -519,9 +519,15 @@ class Instrument:
         print(self, "has stopped", end="")
 
     def step(self, step_callback, should_start_new_measure, replace_last_note=False):
-        # NOTE: This function now contains the algorithm for the Line texture.
-        # When implementing another texture, change this function to take a
-        # callback for the required behaviour.
+        """
+        The generic part of an instrument's simulation step. Tracks time, calls
+        the dynamic's step function, ensures the music played by this
+        instrument is tracked properly in the score. Takes a callback for all
+        texture-specific behaviours.
+
+        TODO: This function could use a cleanup, mainly by splitting it into
+        several functions for legibility.
+        """
         if self.play_time is not None:
             self.play_time += TIMESTEP
 
@@ -650,6 +656,10 @@ class InstrumentGroup:
         )
 
     def step(self, step_callback, should_start_new_measure):
+        """
+        The generic part of a simulation step for an instrument group. Calls
+        the callback function for texture-specific behaviour and tracks time.
+        """
         step_callback(self, should_start_new_measure)
         self.time_since_start += TIMESTEP
 
