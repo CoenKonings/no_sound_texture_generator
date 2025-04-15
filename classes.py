@@ -3,8 +3,6 @@ Contains all classes needed to generate the LilyPond notation of the textures
 in No Sound, a WIP piece for fanfare orchestra.
 
 TODO
-- Move texture-specific behaviour into a callback, which is then passed to the
-  instruments' and instrument groups' step function.
 - Cleanup (refer to TODOs dotted throughout this file)
 - Implement semitone cluster texture.
 """
@@ -506,6 +504,7 @@ class Instrument:
 
     def should_stop(self):
         max_play_time = self.max_note_length - self.instrument_group.texture.fade_time
+
         return (
             self.is_playing and
             self.play_time > max_play_time and
@@ -791,6 +790,10 @@ class Line(Texture):
         return f'[Line with pitches {self.pitches}]'
 
     def instrument_group_step(self, instrument_group, should_start_new_measure):
+        """
+        The part of an InstrumentGroup's simulation step that is specific to
+        the Line texture.
+        """
         for instrument in instrument_group.instruments:
             instrument.step(self.instrument_step, should_start_new_measure)
 
@@ -803,6 +806,10 @@ class Line(Texture):
                     break
 
     def instrument_step(self, instrument):
+        """
+        The part of an instrument's simulation step that is specific to the
+        Line texture.
+        """
         if (instrument.is_stopping and instrument.play_time >= self.fade_time):
             instrument.become_quiet()
 
