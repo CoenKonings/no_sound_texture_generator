@@ -512,22 +512,21 @@ class Instrument:
             not self.is_stopping
         )
 
-    def step(self, should_start_new_measure, replace_last_note=False):
+    def become_quiet(self):
+        self.is_stopping = False
+        self.is_playing = False
+        self.play_time = 0
+        self.pitch.note = -1
+        print(self, "has stopped", end="")
+
+    def step(self, step_callback, should_start_new_measure, replace_last_note=False):
         # NOTE: This function now contains the algorithm for the Line texture.
         # When implementing another texture, change this function to take a
         # callback for the required behaviour.
         if self.play_time is not None:
             self.play_time += TIMESTEP
 
-        if self.is_stopping and self.play_time >= self.instrument_group.texture.fade_time:
-            self.is_stopping = False
-            self.is_playing = False
-            self.play_time = 0
-            self.pitch.note = -1
-            print(self, "has stopped", end="")
-
-        if self.should_stop():
-            self.stop_playing()
+        step_callback(self)
 
         # Dynamic is none if instrument has not started playing yet.
         if self.dynamic is not None:
@@ -653,6 +652,7 @@ class InstrumentGroup:
 
     def step(self, step_callback, should_start_new_measure):
         step_callback(self, should_start_new_measure)
+        self.time_since_start += TIMESTEP
 
     def set_texture(self, texture):
         self.texture = texture
@@ -792,18 +792,22 @@ class Line(Texture):
 
     def instrument_group_step(self, instrument_group, should_start_new_measure):
         for instrument in instrument_group.instruments:
-            instrument.step(should_start_new_measure)
+            instrument.step(self.instrument_step, should_start_new_measure)
 
         if instrument_group.should_start_playing():
             for instrument in instrument_group.instruments:
                 if instrument.can_start_playing():
                     instrument.start_playing()
-                    instrument.step(False, True)
+                    instrument.step(self.instrument_step, False, True)
                     instrument_group.time_since_start = 0
                     break
 
+    def instrument_step(self, instrument):
+        if (instrument.is_stopping and instrument.play_time >= self.fade_time):
+            instrument.become_quiet()
 
-        instrument_group.time_since_start += TIMESTEP
+        if instrument.should_stop():
+            instrument.stop_playing()
 
     def get_pitch(self):
         """
