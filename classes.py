@@ -3,7 +3,6 @@ Contains all classes needed to generate the LilyPond notation of the textures
 in No Sound, a WIP piece for fanfare orchestra.
 
 TODO
-- Implement dynamic change for Line texture.
 - Move texture-specific behaviour into a callback, which is then passed to the
   instruments' and instrument groups' step function.
 - Cleanup (refer to TODOs dotted throughout this file)
@@ -60,6 +59,7 @@ class Pitch:
     """
     NOTE_NAMES = ["c", "des", "d", "es", "e", "f", "ges", "g", "as", "a",
                       "bes", "b", "r"]
+    C, CIS, D, DIS, E, F, FIS, G, GIS, A, AIS, B, REST = 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, -1
 
     def __init__(self, note, octave):
         """
@@ -114,6 +114,9 @@ class Pitch:
         """
         return Pitch.NOTE_NAMES[self.note] + self.octave_to_lilypond()
 
+    def is_rest(self):
+        return self.note == Pitch.REST
+
 
 
 class LilyPondNote:
@@ -131,27 +134,35 @@ class LilyPondNote:
         note = str(self.pitch) + str(self.duration_as_lilypond())
         return self.delayed_events_string() + note + " ".join(self.events)
 
+    def has_tie(self):
+        return "~" in self.events
+
+    def remove_tie(self):
+        self.events.remove("~")
+
     def can_merge(self, note_after):
         """
         Check if the note can merge with the given note, assuming the given
         note comes directly after this note.
-
-        TODO:   Check for ties.
         """
         return (
             note_after is not None and
             self.pitch == note_after.pitch and
             self.duration == note_after.duration and
-            len(note_after.events) == 0
+            (len(note_after.events) == 0 or note_after.events == ["~"]) and
+            (self.has_tie() or self.pitch.is_rest())
         )
 
     def merge(self, note):
         """
         Merge this and the given note by adding the given note's duration to
         this note, and merging their events.
-        TODO:   Properly handle ties.
         """
         self.duration += note.duration
+
+        if self.has_tie():
+            self.remove_tie()
+
         self.events += note.events
         self.delayed_events += note.delayed_events
 
@@ -184,6 +195,13 @@ class LilyPondNote:
             events_string += f'\\after {delay_time} {event} '
 
         return events_string
+
+    def add_tie(self):
+        """
+        Add a tie to the next note.
+        """
+        if "~" not in self.events:
+            self.events.append("~")
 
 
 class LilyPondMeasure:
@@ -220,7 +238,6 @@ class LilyPondMeasure:
             next_note = None if i + 1 == len(self.notes) else self.notes[i + 1]
             # Notes should be merged if they can be merged and merging them
             # will not obfuscate the count groupings and center of a measure.
-            # TODO: incorprate ties when they are properly implemented.
             should_merge_notes = (
                 time_in_measure % timescale == 0 and
                 i < len(self.notes) and
@@ -289,11 +306,19 @@ class LilyPondScore:
 
         return lilypond_string
 
+    def get_num_measures(self):
+        """
+        Get the number of measures in this score.
+        """
+        return len(self.measures)
+
     def get_last_note(self):
         if len(self.measures[-1].notes) != 0:
             return self.measures[-1].notes[-1]
-        else:
+        elif self.get_num_measures() > 1:
             return self.measures[-2].notes[-1]
+        else:
+            return None
 
 
 class Dynamic:
@@ -515,6 +540,15 @@ class Instrument:
             self.score.last_measure().notes.pop(-1)
             self.score.last_measure().add_note(self.pitch, self.events)
         else:
+            previous_note = self.score.get_last_note()
+
+            if (
+                previous_note is not None and
+                previous_note.pitch == self.pitch and
+                not self.pitch.is_rest()
+            ):
+                previous_note.add_tie()
+
             self.score.last_measure().add_note(self.pitch, self.events)
 
         self.events = []
@@ -621,10 +655,6 @@ class InstrumentGroup:
         # NOTE: This function now contains the algorithm for the Line texture.
         # When implementing another texture, change this function to take a
         # callback for the required behaviour.
-
-        # TODO: should_start_playing wordt berekend voor de simulatiestap, wat
-        #       ervoor zorgt dat instrumenten 1 tijdstap te laat beginnen met
-        #       spelen.
 
         for instrument in self.instruments:
             instrument.step(should_start_new_measure)
