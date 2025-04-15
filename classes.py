@@ -651,24 +651,8 @@ class InstrumentGroup:
             self.texture.allows_start_playing()
         )
 
-    def step(self, should_start_new_measure):
-        # NOTE: This function now contains the algorithm for the Line texture.
-        # When implementing another texture, change this function to take a
-        # callback for the required behaviour.
-
-        for instrument in self.instruments:
-            instrument.step(should_start_new_measure)
-
-        if self.should_start_playing():
-            for instrument in self.instruments:
-                if instrument.can_start_playing():
-                    instrument.start_playing()
-                    instrument.step(False, True)
-                    self.time_since_start = 0
-                    break
-
-
-        self.time_since_start += TIMESTEP
+    def step(self, step_callback, should_start_new_measure):
+        step_callback(self, should_start_new_measure)
 
     def set_texture(self, texture):
         self.texture = texture
@@ -696,6 +680,9 @@ class Texture:
 
         for instrument_group in self.instrument_groups:
             instrument_group.set_texture(self)
+
+    def __str__(self):
+        return "[Texture]"
 
     def get_active_instrument_groups(self):
         if self.instrument_group_index % 1 == 0:
@@ -745,11 +732,27 @@ class Texture:
         self.max_playing = new_value
         self.update_groups_max_playing()
 
-    def step(self, *_):
-        raise Exception("Texture step not implemented.")
+    def step(self, should_start_new_measure):
+        self.dynamic.step()
+
+        for instrument_group in self.instrument_groups:
+            instrument_group.step(
+                self.instrument_group_step,
+                should_start_new_measure
+            )
+
+    def instrument_group_step(self, instrument_group, should_start_new_measure):
+        raise Exception(
+            f'Texture {self} instrument_group_step not implemented.'
+        )
+
+    def instrument_step(self, instrument, should_start_new_measure):
+        raise Exception(
+            f'Texture {self} instrument_step not implemented.'
+        )
 
     def get_pitch(self, *_):
-        raise Exception("Texture get_pitch not implemented.")
+        raise Exception(f'Texture {self} get_pitch not implemented.')
 
     def encode_lilypond(self):
         for instrument_group in self.instrument_groups:
@@ -787,20 +790,20 @@ class Line(Texture):
     def __str__(self):
         return f'[Line with pitches {self.pitches}]'
 
-    def step(self, should_start_new_measure):
-        """
-        Perform a timestep in the piece.
+    def instrument_group_step(self, instrument_group, should_start_new_measure):
+        for instrument in instrument_group.instruments:
+            instrument.step(should_start_new_measure)
 
-        @param should_start_new_measure:   True on the first step of a new measure.
+        if instrument_group.should_start_playing():
+            for instrument in instrument_group.instruments:
+                if instrument.can_start_playing():
+                    instrument.start_playing()
+                    instrument.step(False, True)
+                    instrument_group.time_since_start = 0
+                    break
 
-        TODO:   Move the behaviour specific to this type of Texture into a
-                callback, which is then passed as an argument to the instrument
-                group's step function.
-        """
-        self.dynamic.step()
 
-        for instrument_group in self.instrument_groups:
-            instrument_group.step(should_start_new_measure)
+        instrument_group.time_since_start += TIMESTEP
 
     def get_pitch(self):
         """
