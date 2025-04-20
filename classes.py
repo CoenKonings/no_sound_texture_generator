@@ -14,8 +14,8 @@ from pathlib import Path
 
 # Globals to easily edit some parameters.
 TIMESTEP = 0.125  # TODO: move to Piece class
-FOLDER_NAME = 'test'  # TODO: move to Piece.encode_lilypond parameter
-DEBUG_MODE = True
+FOLDER_NAME = '../no_sound_lilypond/notes/movement-1'  # TODO: move to Piece.encode_lilypond parameter
+DEBUG_MODE = False
 
 
 def to_roman_numeral(num):
@@ -57,7 +57,7 @@ class Pitch:
     """
     NOTE_NAMES = ["c", "des", "d", "es", "e", "f", "ges", "g", "as", "a",
                       "bes", "b", "r"]
-    C, CIS, D, DIS, E, F, FIS, G, GIS, A, AIS, B, REST = 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, -1
+    C, DES, D, ES, E, F, GES, G, AS, A, BES, B, REST = 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, -1
 
     def __init__(self, note, octave):
         """
@@ -68,6 +68,26 @@ class Pitch:
         """
         self.note = note
         self.octave = octave
+
+    def new_from_lilypond_notation(lilypond_note):
+        octave = 4  # Octave number for small octave
+        note_name = ""
+
+        for character in lilypond_note:
+            match character:
+                case "\'":
+                    octave += 1
+                case ",":
+                    octave -= 1
+                case _:
+                    note_name += character
+
+        if note_name not in Pitch.NOTE_NAMES:
+            raise Exception("Pitch from lilypond note: incorrect note name.")
+
+        return Pitch(Pitch.NOTE_NAMES.index(note_name), octave)
+
+
 
     def __str__(self):
         return self.to_lilypond()
@@ -455,6 +475,7 @@ class Instrument:
         self.instrument_group = instrument_group
         self.play_time = None
         self.dynamic = None
+        self.allowed_to_play = False
         self.events = []
         self.score = LilyPondScore()
         self.pitch = Pitch(-1, 0)
@@ -561,12 +582,14 @@ class Instrument:
     def can_start_playing(self):
         # If the instrument is not playing, play_time tracks the length of the
         # rest.
-        if self.play_time is None:
+        if not self.allowed_to_play:
+            return False
+        elif self.play_time is None:
             return True
 
         ready_to_start = self.play_time >= self.instrument_group.texture.rest_time
 
-        return ready_to_start and not self.is_playing
+        return ready_to_start and (not self.is_playing) and self.allowed_to_play
 
     def counts_as_playing(self):
         return self.is_playing
@@ -580,15 +603,15 @@ class Instrument:
             else:
                 varname_list.append(substr)
 
-        return "".join(varname_list)
+        return "".join(varname_list) + "notes"
 
     def encode_lilypond(self):
         print(f'encoding lilypond for {self}...')
         filename = self.name.replace(" ", "") + ".ly"
         lilypond_score = ""
 
-        if not DEBUG_MODE:
-            lilypond_score += self.get_lilypond_variable_name() + " = "
+        # if not DEBUG_MODE:
+        #     lilypond_score += "\\" + self.get_lilypond_variable_name() + " = "
 
         lilypond_score += "{" + self.score.encode_lilypond() + "}\n"
 
@@ -604,6 +627,11 @@ class Instrument:
         else:
             self.events.append(self.dynamic.as_lilypond())
 
+    def add_note_event(self, event):
+        """
+        Add a note event, such as a rehearsal mark or staff text.
+        """
+        self.events.append(event)
 
 class InstrumentGroup:
     def __init__(
@@ -669,6 +697,31 @@ class InstrumentGroup:
     def encode_lilypond(self):
         for instrument in self.instruments:
             instrument.encode_lilypond()
+
+    def add_note_event(self, event):
+        """
+        Add a note event, such as an instruction or rehearsal mark, to all
+        instruments in this group.
+        """
+        for instrument in self.instruments:
+            instrument.add_note_event(event)
+
+    def allow_instrument(self, index, allowed):
+        """
+        Allow the instrument at the given index to start playing.
+        """
+        if index >= len(self.instruments):
+            return
+
+        self.instruments[index].allowed_to_play = allowed
+
+    def set_num_allowed_to_play(self, num):
+        """
+        Set the first num instruments to be allowed to play. Disallow playing
+        for all other instruments in this group.
+        """
+        for i in range(num):
+            self.allow_instrument(i, i<num)
 
 
 class Texture:
@@ -770,6 +823,22 @@ class Texture:
     def handle_dynamics(self):
         raise Exception("Texture handle_dynamics not implemented.")
 
+    def add_note_event(self, event):
+        """
+        Add a note event, like an instruction, rehearsal mark, etc, to all
+        instrument groups performing this texture.
+        """
+
+        for instrument_group in self.instrument_groups:
+            instrument_group.add_note_event(event)
+
+    def set_density(self, density):
+        """
+        Set the texture's density in number of instruments.
+        """
+        for instrument_group in self.instrument_groups:
+            instrument_group.set_num_allowed_to_play(density)
+
 
 class Line(Texture):
     """
@@ -787,7 +856,7 @@ class Line(Texture):
             instrument_groups,
             max_playing=1,
             change_rate=0,
-            rest_time=1,
+            rest_time=0.5,
             fade_time=0.5
         ):
 
@@ -880,9 +949,9 @@ class Piece:
     ensures the music is executed correctly.
     """
     def __init__(self, tempo, time_signature, num_measures, events, textures):
-        self.time = 0  # The time in measures
+        self.time = 0  # The time in measures. TODO does beats make more sense?
         self.tempo = tempo
-        self.time_signature = time_signature
+        self.time_signature = time_signature  # Does nothing as of yet.
         self.num_measures = num_measures
         self.events = events
         self.textures = textures
@@ -921,3 +990,23 @@ class Piece:
 
         for texture in self.textures:
             texture.encode_lilypond()
+
+    def seconds_to_measures(self, seconds):
+        """
+        Convert time in seconds to a number of measures. Round to the nearest
+        TIMESTEP.
+
+        NOTE    Only works for 4/4 for now. Might be updated if this type of
+                texture is revisited in a future piece.
+        """
+        num_beats = seconds * self.tempo / 60
+        num_measures = num_beats / 4
+        num_measures_rounded = round(num_measures / TIMESTEP) * TIMESTEP
+        return num_measures_rounded
+
+    def add_note_event(self, event):
+        for texture in self.textures:
+            texture.add_note_event(event)
+
+    def add_texture(self, texture):
+        self.textures.append(texture)
