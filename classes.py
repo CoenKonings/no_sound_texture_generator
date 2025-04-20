@@ -319,8 +319,12 @@ class LilyPondScore:
         """
         lilypond_string = ""
 
-        for measure in self.measures:
+        for index, measure in enumerate(self.measures):
             lilypond_string += measure.lilypond_encode()
+
+            # Add a newline on every fourth bar for legibility.
+            if index % 4 == 0:
+                lilypond_string += "\n"
 
         return lilypond_string
 
