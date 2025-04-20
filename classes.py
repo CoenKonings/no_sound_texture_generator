@@ -743,6 +743,7 @@ class Texture:
 
         self.instrument_group_index = 0
         self.instrument_groups[0].max_playing = self.max_playing
+        self.density = 0
 
         for instrument_group in self.instrument_groups:
             instrument_group.set_texture(self)
@@ -840,8 +841,20 @@ class Texture:
         """
         Set the texture's density in number of instruments.
         """
+        self.density = density
+
         for instrument_group in self.instrument_groups:
             instrument_group.set_num_allowed_to_play(density)
+
+    def add_player(self):
+        if self.density < self.max_playing:
+            self.set_density(self.density + 1)
+        elif self.max_playing < self.density:
+            self.set_max_playing(self.max_playing + 1)
+        else:
+            self.set_density(self.density + 1)
+            self.set_max_playing(self.max_playing + 1)
+
 
 
 class Line(Texture):
@@ -938,13 +951,16 @@ class MusicEvent:
     An event that occurs at a given time. Things like pitch changes, dynamics
     changes, etc. Action is a function to be executed at the given time.
     """
-    def __init__(self, time, action, args):
+    def __init__(self, time, action, args=None):
         self.time = time
         self.action = action
         self.args = args
 
     def execute(self):
-        self.action(*self.args)
+        if self.args is None:
+            self.action()
+        else:
+            self.action(*self.args)
 
 
 class Piece:

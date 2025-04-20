@@ -112,11 +112,12 @@ if __name__ == "__main__":
 
     # Compositional structure
     music_events = [
-        MusicEvent(0, lines[5].set_max_playing, [1]),  # Euphoniums 1 start playing
-        MusicEvent(4.5, lines[6].set_max_playing, [1]),  # Tenorsaxes start playing
-        MusicEvent(7, lines[5].set_density, [2]),
-        MusicEvent(7, lines[5].set_max_playing, [2]),
-        MusicEvent(7.5, lines[4].set_max_playing, [1]),
+        MusicEvent(0, lines[5].add_player),  # Euphonium 1 start playing
+        MusicEvent(4.5, lines[6].add_player),  # Tenorsax 1 start playing
+        MusicEvent(7, lines[5].add_player),  # Euphonium 2 joins
+        MusicEvent(7.5, lines[4].add_player),  # Altsax 1 starts playing
+        MusicEvent(8, lines[6].add_player),  # Tenorsax 2 joins
+        MusicEvent(9, lines[4].add_player),  # Altsax 2 joins
     ]
 
     piece = Piece(70, (4, 4), NUM_MEASURES, music_events, lines)
