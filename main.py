@@ -110,16 +110,43 @@ if __name__ == "__main__":
     for line in lines:
         line.set_density(1)
 
+    piece = Piece(70, (4, 4), NUM_MEASURES, None, lines)
+
     # Compositional structure
     music_events = [
         MusicEvent(0, lines[5].add_player),  # Euphonium 1 start playing
-        MusicEvent(4.5, lines[6].add_player),  # Tenorsax 1 start playing
-        MusicEvent(7, lines[5].add_player),  # Euphonium 2 joins
-        MusicEvent(7.5, lines[4].add_player),  # Altsax 1 starts playing
-        MusicEvent(8, lines[6].add_player),  # Tenorsax 2 joins
-        MusicEvent(9, lines[4].add_player),  # Altsax 2 joins
+        MusicEvent(3.5, lines[6].add_player),  # Tenorsax 1 start playing
+        MusicEvent(5, lines[5].add_player),  # Euphonium 2 joins
+        MusicEvent(6.5, lines[4].add_player),  # Altsax 1 starts playing
+        MusicEvent(7, lines[6].add_player),  # Tenorsax 2 joins
+        MusicEvent(8, lines[4].add_player),  # Altsax 2 joins
+        MusicEvent(8.5, lines[2].add_player),  # Sopsax 1 starts playing
+        MusicEvent(8.75, lines[5].set_density, [3]),  # Euphonium 3 starts playing
+        MusicEvent(9, lines[3].set_max_playing, [2]),  # Horns start playing
+        MusicEvent(9, lines[3].set_density, [6]),
+        MusicEvent(9.5, lines[7].add_player),  # Euphonium 4 starts playing
+        MusicEvent(10, lines[7].set_density, [3]),  # Euphoniums 2 sustain note
+        MusicEvent(11, lines[8].add_player),
+        MusicEvent(11.25, lines[1].add_player),
+        MusicEvent(11.5, lines[0].add_player),
+        MusicEvent(12, lines[7].add_player),
+        MusicEvent(12.5, lines[9].add_player),
+        MusicEvent(13, lines[10].add_player),
+        MusicEvent(20, piece.add_note_event, ["\\bar \"||\""])
     ]
 
-    piece = Piece(70, (4, 4), NUM_MEASURES, music_events, lines)
+    # All lines start increasing dynamics from measure 9 to 18
+    music_events += [
+        MusicEvent(8, line.dynamic.start_change, [Dynamic.FF, 9]) for line in lines
+    ]
+
+    print(music_events)
+
+    piece.events = music_events
     piece.start()
     piece.encode_lilypond()
+
+    mvmt_1_length_bars = round(piece.seconds_to_measures(60))
+    line_texture_length_bars = mvmt_1_length_bars + 18
+    print(f'Movement 1 length: {mvmt_1_length_bars} bars')
+    print(f'Line texture time: {piece.measures_to_seconds(line_texture_length_bars)} seconds')

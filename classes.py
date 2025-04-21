@@ -136,21 +136,21 @@ class Pitch:
         return self.note == Pitch.REST
 
 
-
 class LilyPondNote:
     """
     This class is used to track notes' pitch, duration and events such as ties
     and changes in dynamics.
     """
-    def __init__(self, pitch, events=[], duration=TIMESTEP):
+    def __init__(self, pitch, events_before=[], events=[], duration=TIMESTEP):
         self.pitch = pitch
         self.duration = duration
+        self.events_before = events_before
         self.events = events
         self.delayed_events = []
 
     def __str__(self):
         note = str(self.pitch) + str(self.duration_as_lilypond())
-        return self.delayed_events_string() + note + " ".join(self.events)
+        return " ".join(self.events_before) + " " + self.delayed_events_string() + note + " " + " ".join(self.events)
 
     def has_tie(self):
         return "~" in self.events
@@ -168,6 +168,7 @@ class LilyPondNote:
             self.pitch == note_after.pitch and
             self.duration == note_after.duration and
             (len(note_after.events) == 0 or note_after.events == ["~"]) and
+            len(note_after.events_before) == 0 and
             (self.has_tie() or self.pitch.is_rest())
         )
 
@@ -183,6 +184,7 @@ class LilyPondNote:
 
         self.events += note.events
         self.delayed_events += note.delayed_events
+        self.events_before += note.events_before
 
     def duration_as_lilypond(self):
         """
@@ -221,6 +223,17 @@ class LilyPondNote:
         if "~" not in self.events:
             self.events.append("~")
 
+    def remove_hairpin(self):
+        """
+        Remove any hairpin dynamics markings if they exist.
+        """
+
+        if ("\\>" in self.events):
+            self.events.remove("\\>")
+
+        if ("\\<" in self.events):
+            self.events.remove("\\<")
+
 
 class LilyPondMeasure:
     """
@@ -229,11 +242,17 @@ class LilyPondMeasure:
     def __init__(self):
         self.notes = []
 
-    def add_note(self, pitch, events=[], duration=TIMESTEP):
+    def add_note(self, pitch, events=[], events_before=[], duration=TIMESTEP):
         """
         Add a new note to this measure.
         """
-        self.notes.append(LilyPondNote(copy(pitch), events, duration))
+        self.notes.append(LilyPondNote(copy(pitch), events_before, events, duration))
+
+    def get_length(self):
+        return len(self.notes)
+
+    def get_note(self, index):
+        return self.notes[index]
 
     def lilypond_encode(self):
         """
@@ -305,7 +324,7 @@ class LilyPondScore:
         """
         self.measures.append(LilyPondMeasure())
 
-    def last_measure(self):
+    def get_last_measure(self):
         """
         Helper function for legibility. Returns the last measure in this score.
         """
@@ -323,7 +342,7 @@ class LilyPondScore:
             lilypond_string += measure.lilypond_encode()
 
             # Add a newline on every fourth bar for legibility.
-            if index % 4 == 0:
+            if index % 4 == 3:
                 lilypond_string += "\n"
 
         return lilypond_string
@@ -341,6 +360,28 @@ class LilyPondScore:
             return self.measures[-2].notes[-1]
         else:
             return None
+
+    def get_measure(self, index):
+        return self.measures[index]
+
+    def remove_hairpin(self, time_since_start, current_time):
+        """
+        Remove a hairpin dynamic mark that was started time measures ago.
+
+        @param time:    How long ago the hairpin started. Time in measures.
+        """
+        num_measures = math.floor(time_since_start)
+        num_notes = round((time_since_start % 1) / TIMESTEP)
+        current_measure_length = self.get_last_measure().get_length()
+
+        if current_measure_length < num_notes:
+            num_notes -= current_measure_length
+
+        if current_measure_length == 8 and current_time % 1 == 0:
+            num_measures -= 1
+            num_notes += 8
+
+        self.get_measure(-1 - num_measures).get_note(-num_notes).remove_hairpin()
 
 
 class Dynamic:
@@ -364,6 +405,7 @@ class Dynamic:
         self.start_dynamic = None
         self.parent = parent
         self.time_to_reach_target = 0
+        self.time_spent_changing = None
 
     def __str__(self):
         movement_string = "static"
@@ -405,6 +447,7 @@ class Dynamic:
         self.target_dynamic = target
         self.start_dynamic = self.value
         self.time_to_reach_target = time
+        self.time_spent_changing = 0
         self.parent.handle_dynamics()
 
     def stop_change(self):
@@ -413,19 +456,30 @@ class Dynamic:
         dynamic was reached or when a new change in dynamics was started before
         the target was reached.
         """
+        self.value = round(self.value)
         self.is_changing = False
+        self.parent.handle_dynamics()
         self.target_dynamic = None
         self.start_dynamic = None
         self.time_to_reach_target = 0
-        self.parent.handle_dynamics()
+        self.time_spent_changing = None
         print(self.parent, "reached target dynamic", end="")
+
+    def reached_target(self):
+        if not self.is_changing:
+            return False
+
+        if abs(self.value - self.target_dynamic) < 0.1:
+            return True
+
+        return False
 
     def step(self):
         """
         Perform a simulation step by continuing a change that was started
         before, or by stopping change if the target dynamic was reached.
         """
-        if self.value == self.target_dynamic:
+        if self.reached_target():
             self.stop_change()
             return
 
@@ -433,6 +487,7 @@ class Dynamic:
             num_steps = self.time_to_reach_target / TIMESTEP
             dynamic_step = (self.target_dynamic - self.start_dynamic) / num_steps
             self.value += dynamic_step
+            self.time_spent_changing += TIMESTEP
 
     def change_as_lilypond(self):
         """
@@ -481,6 +536,7 @@ class Instrument:
         self.dynamic = None
         self.allowed_to_play = False
         self.events = []
+        self.events_before = []
         self.score = LilyPondScore()
         self.pitch = Pitch(-1, 0)
 
@@ -566,8 +622,8 @@ class Instrument:
             self.score.new_measure()
 
         if replace_last_note:
-            self.score.last_measure().notes.pop(-1)
-            self.score.last_measure().add_note(self.pitch, self.events)
+            self.score.get_last_measure().notes.pop(-1)
+            self.score.get_last_measure().add_note(self.pitch, self.events, self.events_before)
         else:
             previous_note = self.score.get_last_note()
 
@@ -578,9 +634,10 @@ class Instrument:
             ):
                 previous_note.add_tie()
 
-            self.score.last_measure().add_note(self.pitch, self.events)
+            self.score.get_last_measure().add_note(self.pitch, self.events, self.events_before)
 
         self.events = []
+        self.events_before = []
 
 
     def can_start_playing(self):
@@ -623,19 +680,36 @@ class Instrument:
             file.write(lilypond_score)
 
     def handle_dynamics(self):
+        """
+        Handle dynamics changes etc. by tracking them in LilyPond notes.
+        """
         # Dynamics marks at a rest are added to the previous note.
         if self.pitch.note == -1:
             self.score.get_last_note().delayed_events.append(
                 self.dynamic.as_lilypond()
             )
+        elif (
+            self.dynamic.start_dynamic is not None and
+            self.dynamic.start_dynamic == self.dynamic.value and
+            not self.dynamic.is_changing
+        ):
+            self.score.remove_hairpin(
+                self.dynamic.time_spent_changing,
+                self.instrument_group.texture.piece.time
+            )
         else:
             self.events.append(self.dynamic.as_lilypond())
 
-    def add_note_event(self, event):
+    def add_note_event(self, event, place_before=False):
         """
         Add a note event, such as a rehearsal mark or staff text.
         """
-        self.events.append(event)
+
+        if place_before:
+            self.events_before.append(event)
+        else:
+            self.events.append(event)
+
 
 class InstrumentGroup:
     def __init__(
@@ -702,13 +776,13 @@ class InstrumentGroup:
         for instrument in self.instruments:
             instrument.encode_lilypond()
 
-    def add_note_event(self, event):
+    def add_note_event(self, event, place_before=False):
         """
         Add a note event, such as an instruction or rehearsal mark, to all
         instruments in this group.
         """
         for instrument in self.instruments:
-            instrument.add_note_event(event)
+            instrument.add_note_event(event, place_before)
 
     def allow_instrument(self, index, allowed):
         """
@@ -734,9 +808,11 @@ class Texture:
             pitches,
             dynamic,
             instrument_groups,
+            piece=None,
             max_playing=1
         ):
         self.pitches = pitches
+        self.piece = piece
         self.dynamic = Dynamic(dynamic, self)
         self.instrument_groups = instrument_groups
         self.max_playing = max_playing
@@ -828,14 +904,14 @@ class Texture:
     def handle_dynamics(self):
         raise Exception("Texture handle_dynamics not implemented.")
 
-    def add_note_event(self, event):
+    def add_note_event(self, event, place_before=False):
         """
         Add a note event, like an instruction, rehearsal mark, etc, to all
         instrument groups performing this texture.
         """
 
         for instrument_group in self.instrument_groups:
-            instrument_group.add_note_event(event)
+            instrument_group.add_note_event(event, place_before)
 
     def set_density(self, density):
         """
@@ -855,6 +931,9 @@ class Texture:
             self.set_density(self.density + 1)
             self.set_max_playing(self.max_playing + 1)
 
+    def stop(self):
+        self.set_density(0)
+        self.set_max_playing(0)
 
 
 class Line(Texture):
@@ -871,16 +950,18 @@ class Line(Texture):
             pitches,
             dynamic,
             instrument_groups,
+            piece=None,
             max_playing=1,
             change_rate=0,
             rest_time=0.5,
             fade_time=0.5
         ):
 
-        super().__init__(pitches, dynamic, instrument_groups, max_playing)
+        super().__init__(pitches, dynamic, instrument_groups, piece, max_playing)
         self.change_rate = change_rate
         self.rest_time = rest_time
         self.fade_time = fade_time
+        self.piece = piece
 
     def __str__(self):
         return f'[Line with pitches {self.pitches}]'
@@ -969,12 +1050,15 @@ class Piece:
     ensures the music is executed correctly.
     """
     def __init__(self, tempo, time_signature, num_measures, events, textures):
-        self.time = 0  # The time in measures. TODO does beats make more sense?
+        self.time = 0  # The time in measures.
         self.tempo = tempo
         self.time_signature = time_signature  # Does nothing as of yet.
         self.num_measures = num_measures
         self.events = events
         self.textures = textures
+
+        for texture in self.textures:
+            texture.piece = self
 
     def show(self):
         print("%3f" % self.time, end="")
@@ -990,9 +1074,14 @@ class Piece:
         self.events.sort(key=lambda x: x.time)
 
         while self.time < self.num_measures:
-            self.show()
+            if DEBUG_MODE:
+                self.show()
+
             self.step()
-            print("")
+
+            if DEBUG_MODE:
+                print("")
+
             self.time += TIMESTEP
 
     def step(self):
@@ -1016,17 +1105,33 @@ class Piece:
         Convert time in seconds to a number of measures. Round to the nearest
         TIMESTEP.
 
-        NOTE    Only works for 4/4 for now. Might be updated if this type of
-                texture is revisited in a future piece.
+        NOTE: Only works for 4/4 for now. Might be updated if this type of
+        texture is revisited in a future piece.
         """
         num_beats = seconds * self.tempo / 60
         num_measures = num_beats / 4
         num_measures_rounded = round(num_measures / TIMESTEP) * TIMESTEP
         return num_measures_rounded
 
-    def add_note_event(self, event):
+    def measures_to_seconds(self, measures):
+        """
+        Convert time in measures to time in seconds.
+
+        NOTE: Only works for 4/4 for now. Might be updated if this type of
+        texture is revisited in a future piece.
+        """
+        seconds_per_beat = 60 / self.tempo
+        seconds_per_measure = seconds_per_beat * 4
+        return seconds_per_measure * measures
+
+    def add_note_event(self, event, place_before=True):
+        """
+        Add a note event to all notes at the current time.
+
+        @param event:   A string containing the note event in LilyPond notation.
+        """
         for texture in self.textures:
-            texture.add_note_event(event)
+            texture.add_note_event(event, place_before)
 
     def add_texture(self, texture):
         self.textures.append(texture)
