@@ -1,10 +1,24 @@
 import sys
 from classes import *
+import pprint
+
+
+pp = pprint.PrettyPrinter(indent=4)
+
 
 """
 TODO:
 Overgebonden (kwart)noten vaak niet nodig
 """
+
+
+def split_instrument_groups(instrument_group_dict):
+    for line in lines:
+        if len(line.instrument_groups) > 1:
+            for new_line in line.split_instrument_groups():
+                instrument_group_dict[new_line.instrument_groups[0].name] = new_line
+        else:
+            instrument_group_dict[line.instrument_groups[0].name] = line
 
 
 if __name__ == "__main__":
@@ -17,7 +31,7 @@ if __name__ == "__main__":
     basssaxes = InstrumentGroup("basssaxes", "basssax", None, 1.5, 1)
 
     flugelhorns = [
-        InstrumentGroup("flugelhorns", "flugelhorn", (58, 77), 2, i, number_start=j) for i,j in [(5,1), (4, 6), (4, 10)]
+        InstrumentGroup(f"flugelhorns{num + 1}", "flugelhorn", (58, 77), 2, i, number_start=j) for num,(i,j) in enumerate([(5,1), (4, 6), (4, 10)])
     ]
 
     horns = InstrumentGroup("horns", "horn", None, 2, 6)
@@ -29,7 +43,7 @@ if __name__ == "__main__":
     basstrombone = InstrumentGroup("basstrombones", "bass trombone", None, 1.5, 1)
 
     euphoniums = [
-        InstrumentGroup("euphoniums", "euphonium", None, 2, 3, number_start=x) for x in [1, 4]
+        InstrumentGroup(f"euphoniums{num+1}", "euphonium", None, 2, 3, number_start=x) for num,x in enumerate([1, 4])
     ]
 
     esbasstubas = InstrumentGroup("esbasstubas", "es bass", None, 1.5, 3)
@@ -114,10 +128,17 @@ if __name__ == "__main__":
 
     for line in lines:
         line.set_density(1)
+        line.link_rest_time_to_dynamic([2, 0.25])
+
+        if line is lines[5]:
+            print("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+            print(line.rest_time_range, line.dynamic.value)
+            print("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
 
     piece = Piece(70, (4, 4), NUM_MEASURES, None, lines)
 
-    # Compositional structure
+
+    # Composition: Movement 1 part 1 (building up)
     music_events = [
         MusicEvent(1, lines[5].add_player),  # Euphonium 1 start playing
         MusicEvent(4.5, lines[4].add_player),  # Altsax 1 start playing
@@ -143,28 +164,32 @@ if __name__ == "__main__":
         MusicEvent(16, lines[7].set_max_playing, [1]),  # With one player
         MusicEvent(17, lines[5].set_instrument_group_index, [1]),
         MusicEvent(19, lines[2].set_instrument_group_index, [1]),  # Sopsaxes are taken over by flugelhorns
+        MusicEvent(19, lines[3].set_density, [2]),  # 2 horns join
+        MusicEvent(19, lines[3].set_max_playing, [2]),
         MusicEvent(20, lines[7].set_max_playing, [2]),  # Euhps 2 note with two players
         MusicEvent(20, lines[0].set_max_playing, [2]),  # Flg 1 joins with 2 players
         MusicEvent(20, lines[0].set_density, [2]),
         MusicEvent(20.5, lines[2].set_density, [4]),  # Flg 2 note with two players
         # First time contra octave is heard
-        MusicEvent(21, lines[3].set_density, [6]),  # All horns join
         MusicEvent(21, lines[3].set_max_playing, [6]),
+        MusicEvent(21, lines[3].add_player),  # Horn 3 joins
         MusicEvent(21.5, lines[10].add_player),  # Bass sax joins
         MusicEvent(22, lines[2].add_player),  # Flg 2 note with 3 players
         MusicEvent(22.5, lines[10].add_player),  # E flat bass joins
         MusicEvent(23, lines[0].set_max_playing, [3]),  # Add another flg. 1 player
         MusicEvent(23, lines[0].set_density, [5]),
         MusicEvent(23, lines[2].add_player),  # Flg 2 note with 4 players
-        MusicEvent(24, lines[10].add_player),  # B flat bass joins
+        MusicEvent(23, lines[10].add_player),  # E flat bass 2 joins
+        MusicEvent(23, lines[3].add_player),
+        MusicEvent(23, lines[6].add_player),
+        MusicEvent(24, lines[10].add_player),  # E flat bass 3 joins
         MusicEvent(24, lines[2].add_player),  # Sopsaxes rejoin note with 4 players
-
-
-
-        MusicEvent(23, lines[3].set_max_playing, [6]),
 
         MusicEvent(24.5, lines[0].set_max_playing, [10]),
         MusicEvent(24.5, lines[0].set_density, [5]),
+
+        MusicEvent(23, lines[3].set_max_playing, [6]),
+        MusicEvent(23, lines[3].set_density, [6]),
 
         MusicEvent(25, lines[1].set_max_playing, [4]),
         MusicEvent(25, lines[1].set_density, [4]),
@@ -177,34 +202,77 @@ if __name__ == "__main__":
         MusicEvent(25, lines[5].set_max_playing, [6]),
         MusicEvent(25, lines[5].set_density, [3]),
 
-        MusicEvent(25, lines[6].set_max_playing, [7]),
-        MusicEvent(25, lines[6].set_density, [4]),
-
         MusicEvent(25, lines[7].set_max_playing, [3]),
         MusicEvent(25, lines[7].set_density, [3]),
-
-        MusicEvent(25, lines[8].set_max_playing, [1]),
-        MusicEvent(25, lines[8].set_density, [1]),
 
         MusicEvent(25, lines[9].set_max_playing, [1]),
         MusicEvent(25, lines[9].set_density, [1]),
 
-        MusicEvent(25, lines[10].set_max_playing, [7]),
-        MusicEvent(25, lines[10].set_density, [3]),
+        MusicEvent(25, lines[6].add_player),
+        MusicEvent(25.5, lines[6].add_player),
 
-        MusicEvent(28, piece.add_note_event, ["\\bar \"||\""]),
+        MusicEvent(26, lines[6].set_max_playing, [7]),
+        MusicEvent(26, lines[6].set_density, [4]),
+
+        MusicEvent(26, lines[10].set_density, [3]),
+        MusicEvent(26, lines[10].set_max_playing, [7]),
+
+        MusicEvent(27, lines[8].set_max_playing, [1]),
+        MusicEvent(27, lines[8].set_density, [1]),
+
+        MusicEvent(30, piece.add_note_event, ["\\bar \"||\""]),
     ]
 
-    # All lines start increasing dynamics from measure 16 to 24
+    # All lines start increasing dynamics from measure 19 to 29
     music_events += [
-        MusicEvent(17, line.dynamic.start_change, [Dynamic.FF, 8]) for line in lines
+        MusicEvent(19, line.dynamic.start_change, [Dynamic.FF, 10]) for line in lines
+    ]
+
+    """
+    At the end of the build-up, the instrument groups start coming loose from
+    the texture. To this end, the lines with more than 1 instrument group
+    need to be split.
+
+    For legibility, the line textures are now added to a dictionary, where the
+    key is the name of the instrument group playing the line.
+    """
+    inst_grps = {}
+
+    music_events += [
+        MusicEvent(30, split_instrument_groups, [inst_grps])
+    ]
+
+    # Generate composition movement 1 part 1 (30 measures)
+    # This ensures the new inst_grps dictionary is created before the
+    # program continues.
+    piece.events = music_events
+    piece.start(30)
+
+
+    # Composition: Movement 1 part 2 (breaking down)
+    music_events = [
+        MusicEvent(30, inst_grps["altsaxes"].dynamic.start_change, [Dynamic.MP, 1]),
+        MusicEvent(30, inst_grps["tenorsaxes"].dynamic.start_change, [Dynamic.MP, 1]),
+        MusicEvent(30, inst_grps["baritonesaxes"].dynamic.start_change, [Dynamic.MP, 1]),
+        MusicEvent(30, inst_grps["basssaxes"].dynamic.start_change, [Dynamic.MP, 1]),
+        MusicEvent(30, inst_grps["sopsaxes"].dynamic.start_change, [Dynamic.MP, 1]),
+        MusicEvent(30, inst_grps["flugelhorns2"].dynamic.start_change, [Dynamic.MP, 1]),
+        MusicEvent(30, inst_grps["flugelhorns3"].dynamic.start_change, [Dynamic.MP, 1]),
+        MusicEvent(30, inst_grps["horns"].dynamic.start_change, [Dynamic.MP, 2]),
+        MusicEvent(30, inst_grps["trumpets"].dynamic.start_change, [Dynamic.MP, 1]),
+        MusicEvent(30, inst_grps["trombones"].dynamic.start_change, [Dynamic.MP, 3]),
+        MusicEvent(30, inst_grps["euphoniums1"].dynamic.start_change, [Dynamic.MP, 2]),
+        MusicEvent(30, inst_grps["euphoniums2"].dynamic.start_change, [Dynamic.MP, 2]),
+        MusicEvent(30, inst_grps["esbasstubas"].dynamic.start_change, [Dynamic.MP, 4]),
+        MusicEvent(30, inst_grps["besbasstubas"].dynamic.start_change, [Dynamic.MP, 4]),
+
+        MusicEvent(31, inst_grps["flugelhorns1"].dynamic.start_change, [Dynamic.MP, 2]),
+        MusicEvent(32, inst_grps["alto horns"].dynamic.start_change, [Dynamic.MP, 1]),
+        MusicEvent(32, inst_grps["basstrombones"].set_rest_time, [2]),
     ]
 
     piece.events = music_events
     piece.start()
     piece.encode_lilypond()
 
-    mvmt_1_length_bars = round(piece.seconds_to_measures(90))
-    line_texture_length_bars = mvmt_1_length_bars + 18
-    debug(f'Movement 1 length: {mvmt_1_length_bars} bars')
-    debug(f'Line texture time: {piece.measures_to_seconds(line_texture_length_bars)} seconds')
+    print(f'Piece length: {NUM_MEASURES} measures ({round(piece.measures_to_seconds(NUM_MEASURES))} seconds)')

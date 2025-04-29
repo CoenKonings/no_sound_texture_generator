@@ -8,7 +8,7 @@ TODO
 """
 
 import math
-from copy import copy
+from copy import copy, deepcopy
 from pathlib import Path
 import time
 
@@ -674,7 +674,7 @@ class Instrument:
 
         ready_to_start = self.play_time >= self.instrument_group.texture.rest_time
 
-        return ready_to_start and (not self.is_playing) and self.allowed_to_play
+        return ready_to_start and not self.is_playing
 
     def counts_as_playing(self):
         return self.is_playing
@@ -886,22 +886,31 @@ class Texture:
                 instrument_group.max_playing = n
                 max_playing -= n
             # If x is the index of the final instrument group
-            elif x % num_instrument_groups == y % num_instrument_groups:
+            elif x == y:
                 instrument_group = self.instrument_groups[x]
                 n = min(max_playing, instrument_group.get_num_instruments())
                 instrument_group.max_playing = n
                 max_playing -= n
             else:
                 instrument_group_a = self.instrument_groups[x]
-                instrument_group_b = self.instrument_groups[y]
-                n_a = min(max_playing / 2, instrument_group_a.get_num_instruments())
-                n_b = min(max_playing / 2, instrument_group_b.get_num_instruments())
+                n_a = min(round(max_playing / 2), instrument_group_a.get_num_instruments())
                 instrument_group_a.max_playing = n_a
+                max_playing -= n_a
+
+                instrument_group_b = self.instrument_groups[y]
+                n_b = min(round(max_playing / 2), instrument_group_b.get_num_instruments())
                 instrument_group_b.max_playing = n_b
-                max_playing -= n_a + n_b
+                max_playing -= n_b
 
             if max_playing == 0:
                 break
+
+    def split_instrument_groups(self):
+        """
+        If this texture has multiple instrument groups, return a list of copies
+        of this texture, each with one of this texture's instrument groups.
+        """
+        raise Exception(f'Texture {self} split_instrument_groups not implemented')
 
     def allows_start_playing(self):
         num_playing = 0
@@ -1002,6 +1011,8 @@ class Line(Texture):
         self.rest_time = rest_time
         self.fade_time = fade_time
         self.piece = piece
+        self.manual_rest_time = True
+        self.rest_time_range = (None, None)
 
     def __str__(self):
         return f'[Line with pitches {self.pitches}]'
@@ -1033,6 +1044,21 @@ class Line(Texture):
 
         if instrument.should_stop():
             instrument.stop_playing()
+
+
+    def step(self, should_start_new_measure):
+        if not self.manual_rest_time:
+            # Interpolate rest time from range based on dynamic.
+            scaled_dynamic = self.dynamic.value / Dynamic.FFF
+            rest_range_diff = self.rest_time_range[1] - self.rest_time_range[0]
+            scaled_rest_time = scaled_dynamic * rest_range_diff
+            scaled_rest_time += self.rest_time_range[0]
+            rounded_rest_time = round(scaled_rest_time / TIMESTEP) * TIMESTEP
+            self.rest_time = rounded_rest_time
+
+        super().step(should_start_new_measure)
+
+
 
     def get_pitch(self):
         """
@@ -1066,6 +1092,41 @@ class Line(Texture):
                             self.dynamic.value,
                             self.fade_time
                         )
+
+    def split_instrument_groups(self):
+        if len(self.instrument_groups) == 1:
+            return self
+
+        new_lines = []
+
+        for i, instrument_group in enumerate(self.instrument_groups):
+            if i == len(self.instrument_groups) - 1:
+                # Skip the last iteration
+                break
+
+            new_line = copy(self)
+            new_line.instrument_groups = [instrument_group]
+            new_line.dynamic = copy(self.dynamic)
+            new_line.dynamic.parent = new_line
+            new_line.pitches = deepcopy(self.pitches)
+            instrument_group.texture = new_line
+
+            new_lines.append(new_line)
+
+        self.instrument_groups = [self.instrument_groups[-1]]
+        new_lines.append(self)
+
+        return new_lines
+
+
+    def set_rest_time(self, rest_time):
+        self.manual_rest_time = True
+        self.rest_time = rest_time
+
+
+    def link_rest_time_to_dynamic(self, range):
+        self.manual_rest_time = False
+        self.rest_time_range = range
 
 
 class MusicEvent:
@@ -1111,11 +1172,16 @@ class Piece:
         else:
             debug(".", end="")
 
-    def start(self):
-        print("Generating piece...")
+    def start(self, num_measures=None):
+        if self.time == 0:
+            print("Generating piece...")
+
         self.events.sort(key=lambda x: x.time)
 
-        while self.time < self.num_measures:
+        if num_measures is None:
+            num_measures = self.num_measures
+
+        while self.time < num_measures:
             self.show()
             self.step()
             debug("")
@@ -1126,7 +1192,8 @@ class Piece:
                 time.sleep(0.02)  # This makes for a prettier demonstration vid.
                 print(f"\x1b[2KGenerating measure {int(self.time)}", end="\r")
 
-        print("\x1b[2K\rPiece finished.")
+        if self.time == self.num_measures:
+            print("\x1b[2K\rPiece finished.")
 
     def step(self):
         # Time is measured in bars/measures.
