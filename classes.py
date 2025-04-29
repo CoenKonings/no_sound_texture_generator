@@ -16,7 +16,24 @@ import time
 # Globals to easily edit some parameters.
 TIMESTEP = 0.125  # TODO: move to Piece class
 FOLDER_NAME = '../no_sound_lilypond/notes/movement-1'  # TODO: move to Piece.encode_lilypond parameter
-DEBUG_MODE = True
+DEBUG_MODE = False
+
+
+def duration_to_lilypond(time):
+    """
+    NOTE: Does not support notes faster than 16ths.
+    """
+    if time > 1:
+        raise Exception("Multi-measure time to lilypond not supported.")
+
+    # Account for dotted notes
+    if time % TIMESTEP != 0:
+        lilypond_time = 1 / (time / 3 * 4) * 2
+        lilypond_time = str(round(lilypond_time)) + "."
+    else:
+        lilypond_time = str(lilypond_time)
+
+    return lilypond_time
 
 
 def debug(x, end="\n"):
@@ -219,10 +236,10 @@ class LilyPondNote:
         @returns    The event formatted using LilyPond's "after" command.
         """
         events_string = ""
-        delay_time = str(self.duration_as_lilypond() * 2) + "."
 
         for event in self.delayed_events:
-            events_string += f'\\after {delay_time} {event} '
+            delay_time = duration_to_lilypond(event[0])
+            events_string += f'\\after {delay_time} {event[1]} '
 
         return events_string
 
@@ -705,9 +722,11 @@ class Instrument:
         """
         # Dynamics marks at a rest are added to the previous note.
         if self.pitch.note == -1:
-            self.score.get_last_note().delayed_events.append(
+            last_note = self.score.get_last_note()
+            last_note.delayed_events.append([
+                last_note.duration * 0.75,
                 self.dynamic.as_lilypond()
-            )
+            ])
         elif (
             self.dynamic.start_dynamic is not None and
             self.dynamic.start_dynamic == self.dynamic.value and
