@@ -10,12 +10,18 @@ TODO
 import math
 from copy import copy
 from pathlib import Path
+import time
 
 
 # Globals to easily edit some parameters.
 TIMESTEP = 0.125  # TODO: move to Piece class
 FOLDER_NAME = '../no_sound_lilypond/notes/movement-1'  # TODO: move to Piece.encode_lilypond parameter
 DEBUG_MODE = False
+
+
+def debug(x, end="\n"):
+    if DEBUG_MODE:
+        print(x, end=end)
 
 
 def to_roman_numeral(num):
@@ -145,7 +151,10 @@ class LilyPondNote:
         self.pitch = pitch
         self.duration = duration
         self.events_before = events_before
-        self.events = events
+        self.events = []
+        for event in events:
+            self.add_event(event)
+
         self.delayed_events = []
 
     def __str__(self):
@@ -233,6 +242,17 @@ class LilyPondNote:
 
         if ("\\<" in self.events):
             self.events.remove("\\<")
+
+    def add_event(self, event):
+        if event in ["\\<", "\\>"]:
+            # Newest (de)crescendo has priority
+            if "\\<" in self.events:
+                self.events.remove("\\<")
+            if "\\>" in self.events:
+                self.events.remove("\\>")
+
+        if event not in self.events:
+            self.events.append(event)
 
 
 class LilyPondMeasure:
@@ -374,12 +394,12 @@ class LilyPondScore:
         num_notes = round((time_since_start % 1) / TIMESTEP)
         current_measure_length = self.get_last_measure().get_length()
 
-        if current_measure_length < num_notes:
-            num_notes -= current_measure_length
-
         if current_measure_length == 8 and current_time % 1 == 0:
             num_measures -= 1
             num_notes += 8
+
+        if current_measure_length < num_notes:
+            num_notes -= current_measure_length
 
         self.get_measure(-1 - num_measures).get_note(-num_notes).remove_hairpin()
 
@@ -457,19 +477,20 @@ class Dynamic:
         the target was reached.
         """
         self.value = round(self.value)
+        # self.value = math.floor(self.value) if self.value % 1 < 0.8 else math.ceil(self.value)
         self.is_changing = False
         self.parent.handle_dynamics()
         self.target_dynamic = None
         self.start_dynamic = None
         self.time_to_reach_target = 0
         self.time_spent_changing = None
-        print(self.parent, "reached target dynamic", end="")
+        debug((self.parent, "reached target dynamic"), end="")
 
-    def reached_target(self):
+    def reached_target(self, step_size):
         if not self.is_changing:
             return False
 
-        if abs(self.value - self.target_dynamic) < 0.1:
+        if abs(self.value - self.target_dynamic) < abs(step_size * 0.5):
             return True
 
         return False
@@ -479,20 +500,22 @@ class Dynamic:
         Perform a simulation step by continuing a change that was started
         before, or by stopping change if the target dynamic was reached.
         """
-        if self.reached_target():
-            self.stop_change()
-            return
 
         if self.is_changing:
             num_steps = self.time_to_reach_target / TIMESTEP
             dynamic_step = (self.target_dynamic - self.start_dynamic) / num_steps
+
+            if self.reached_target(dynamic_step):
+                self.stop_change()
+                return
+
             self.value += dynamic_step
             self.time_spent_changing += TIMESTEP
 
     def change_as_lilypond(self):
         """
-        Encode an ongoing change in dynamics in LilyPond notation: \< for a
-        crescendo, \> for a decrescendo, or nothing if no gradual change is
+        Encode an ongoing change in dynamics in LilyPond notation: \\< for a
+        crescendo, \\> for a decrescendo, or nothing if no gradual change is
         taking place.
 
         @returns:   The current ongoing change (crescendo, decrescendo, none)
@@ -558,10 +581,10 @@ class Instrument:
             self.instrument_group.texture.fade_time
         )
 
-        print(
-            self,
+        debug(
+            (self,
             f'starts playing {self.pitch} on',
-            self.dynamic,
+            self.dynamic),
             end=""
         )
 
@@ -574,12 +597,12 @@ class Instrument:
                 self.instrument_group.texture.fade_time
             )
 
-            print(self, "is stopping with", self.dynamic, end="")
+            debug((self, "is stopping with", self.dynamic), end="")
         else:
             self.is_stopping = False
             self.is_playing = False
             self.pitch.note = -1
-            print(self, "has stopped", end="")
+            debug(self, "has stopped", end="")
 
         self.instrument_group.num_playing -= 1
 
@@ -597,7 +620,8 @@ class Instrument:
         self.is_playing = False
         self.play_time = 0
         self.pitch.note = -1
-        print(self, "has stopped", end="")
+
+        debug((self, "has stopped"), end="")
 
     def step(self, step_callback, should_start_new_measure, replace_last_note=False):
         """
@@ -667,13 +691,10 @@ class Instrument:
         return "".join(varname_list) + "notes"
 
     def encode_lilypond(self):
-        print(f'encoding lilypond for {self}...')
+        print(f'\x1b[2KEncoding score for {self.name} in lilypond...', end="\r")
+        time.sleep(0.05)
         filename = self.name.replace(" ", "") + ".ly"
         lilypond_score = ""
-
-        # if not DEBUG_MODE:
-        #     lilypond_score += "\\" + self.get_lilypond_variable_name() + " = "
-
         lilypond_score += "{" + self.score.encode_lilypond() + "}\n"
 
         with open(f'{FOLDER_NAME}/{filename}', 'w+') as file:
@@ -698,7 +719,7 @@ class Instrument:
                 self.instrument_group.texture.piece.time
             )
         else:
-            self.events.append(self.dynamic.as_lilypond())
+            self.add_note_event(self.dynamic.as_lilypond())
 
     def add_note_event(self, event, place_before=False):
         """
@@ -788,9 +809,6 @@ class InstrumentGroup:
         """
         Allow the instrument at the given index to start playing.
         """
-        if index >= len(self.instruments):
-            return
-
         self.instruments[index].allowed_to_play = allowed
 
     def set_num_allowed_to_play(self, num):
@@ -798,8 +816,11 @@ class InstrumentGroup:
         Set the first num instruments to be allowed to play. Disallow playing
         for all other instruments in this group.
         """
-        for i in range(num):
+        for i in range(len(self.instruments)):
             self.allow_instrument(i, i<num)
+
+    def get_num_instruments(self):
+        return len(self.instruments)
 
 
 class Texture:
@@ -847,21 +868,40 @@ class Texture:
         self.update_groups_max_playing()
 
     def update_groups_max_playing(self):
-        decimal = self.instrument_group_index % 1
+        index = round(self.instrument_group_index)
+        decimal = abs(self.instrument_group_index - index)
+        max_playing = self.max_playing
+        num_instrument_groups = len(self.instrument_groups)
 
-        # If the index has no decimal numbers, all instruments should be played
-        # by the same group.
-        if decimal == 0:
-            self.instrument_groups[self.instrument_group_index].max_playing = self.max_playing
-            return
+        # TODO: Clean if else spaghetti
+        for i in range(int(num_instrument_groups / 2) + 1):
+            x = (index + i) % num_instrument_groups
+            y = (index - i) % num_instrument_groups
 
-        index = math.floor(self.instrument_group_index)
-        # If 50/50, favour the first instrument group.
-        # TODO: If the calculation below results in a number larger than the
-        #       size of the group, have the exceeding amount "overflow" into
-        #       adjacent groups.
-        self.instrument_groups[index].max_playing = math.ceil(self.max_playing * decimal)
-        self.instrument_groups[index + 1].max_playing = math.floor(self.max_playing * (1 - decimal))
+            # If x is the instrument group that should be loudest
+            if i == 0:
+                n = max_playing * (1 - decimal)
+                instrument_group = self.instrument_groups[x]
+                n = min(n, instrument_group.get_num_instruments())
+                instrument_group.max_playing = n
+                max_playing -= n
+            # If x is the index of the final instrument group
+            elif x % num_instrument_groups == y % num_instrument_groups:
+                instrument_group = self.instrument_groups[x]
+                n = min(max_playing, instrument_group.get_num_instruments())
+                instrument_group.max_playing = n
+                max_playing -= n
+            else:
+                instrument_group_a = self.instrument_groups[x]
+                instrument_group_b = self.instrument_groups[y]
+                n_a = min(max_playing / 2, instrument_group_a.get_num_instruments())
+                n_b = min(max_playing / 2, instrument_group_b.get_num_instruments())
+                instrument_group_a.max_playing = n_a
+                instrument_group_b.max_playing = n_b
+                max_playing -= n_a + n_b
+
+            if max_playing == 0:
+                break
 
     def allows_start_playing(self):
         num_playing = 0
@@ -980,6 +1020,7 @@ class Line(Texture):
                     instrument.start_playing()
                     instrument.step(self.instrument_step, False, True)
                     instrument_group.time_since_start = 0
+                    # Break to stagger start times
                     break
 
     def instrument_step(self, instrument):
@@ -1033,7 +1074,7 @@ class MusicEvent:
     changes, etc. Action is a function to be executed at the given time.
     """
     def __init__(self, time, action, args=None):
-        self.time = time
+        self.time = time - 1  # Convert between start=0 and start=1
         self.action = action
         self.args = args
 
@@ -1061,28 +1102,31 @@ class Piece:
             texture.piece = self
 
     def show(self):
-        print("%3f" % self.time, end="")
+        debug("%3f" % self.time, end="")
 
         if self.time.is_integer():
-            print("---------", end="")
+            debug("---------", end="")
         elif self.time % 0.25 == 0:
-            print("-", end="")
+            debug("-", end="")
         else:
-            print(".", end="")
+            debug(".", end="")
 
     def start(self):
+        print("Generating piece...")
         self.events.sort(key=lambda x: x.time)
 
         while self.time < self.num_measures:
-            if DEBUG_MODE:
-                self.show()
-
+            self.show()
             self.step()
-
-            if DEBUG_MODE:
-                print("")
+            debug("")
 
             self.time += TIMESTEP
+
+            if self.time % 1 == 0:
+                time.sleep(0.02)  # This makes for a prettier demonstration vid.
+                print(f"\x1b[2KGenerating measure {int(self.time)}", end="\r")
+
+        print("\x1b[2K\rPiece finished.")
 
     def step(self):
         # Time is measured in bars/measures.
@@ -1097,8 +1141,12 @@ class Piece:
     def encode_lilypond(self):
         Path(FOLDER_NAME).mkdir(exist_ok=True)
 
+        print("Encoding piece in LilyPond...")
+
         for texture in self.textures:
             texture.encode_lilypond()
+
+        print("\x1b[2K\rLilyPond encoding finished.")
 
     def seconds_to_measures(self, seconds):
         """
