@@ -16,7 +16,7 @@ import time
 # Globals to easily edit some parameters.
 TIMESTEP = 0.125  # TODO: move to Piece class
 FOLDER_NAME = '../no_sound_lilypond/notes/movement-1'  # TODO: move to Piece.encode_lilypond parameter
-DEBUG_MODE = False
+DEBUG_MODE = True
 
 
 def debug(x, end="\n"):
@@ -186,6 +186,7 @@ class LilyPondNote:
         Merge this and the given note by adding the given note's duration to
         this note, and merging their events.
         """
+
         self.duration += note.duration
 
         if self.has_tie():
@@ -484,7 +485,7 @@ class Dynamic:
         self.start_dynamic = None
         self.time_to_reach_target = 0
         self.time_spent_changing = None
-        debug((self.parent, "reached target dynamic"), end="")
+        debug(f"{self.parent} reached target dynamic", end="")
 
     def reached_target(self, step_size):
         if not self.is_changing:
@@ -572,6 +573,7 @@ class Instrument:
         self.instrument_group.num_playing += 1
         self.pitch = self.instrument_group.texture.get_pitch()
 
+
         if not self.dynamic:
             self.dynamic = Dynamic(Dynamic.PPP, self)
             self.handle_dynamics()
@@ -582,9 +584,7 @@ class Instrument:
         )
 
         debug(
-            (self,
-            f'starts playing {self.pitch} on',
-            self.dynamic),
+            f'{self} starts playing {self.pitch} on {self.dynamic}',
             end=""
         )
 
@@ -597,12 +597,12 @@ class Instrument:
                 self.instrument_group.texture.fade_time
             )
 
-            debug((self, "is stopping with", self.dynamic), end="")
+            debug((f"{self} is stopping with {self.dynamic}"), end="")
         else:
             self.is_stopping = False
             self.is_playing = False
             self.pitch.note = -1
-            debug(self, "has stopped", end="")
+            debug(f"{self} has stopped", end="")
 
         self.instrument_group.num_playing -= 1
 
@@ -621,7 +621,7 @@ class Instrument:
         self.play_time = 0
         self.pitch.note = -1
 
-        debug((self, "has stopped"), end="")
+        debug(f"{self} has stopped", end="")
 
     def step(self, step_callback, should_start_new_measure, replace_last_note=False):
         """
@@ -673,7 +673,6 @@ class Instrument:
             return True
 
         ready_to_start = self.play_time >= self.instrument_group.texture.rest_time
-
         return ready_to_start and not self.is_playing
 
     def counts_as_playing(self):
@@ -1110,6 +1109,7 @@ class Line(Texture):
             new_line.dynamic.parent = new_line
             new_line.pitches = deepcopy(self.pitches)
             instrument_group.texture = new_line
+            new_line.piece.textures.append(new_line)
 
             new_lines.append(new_line)
 

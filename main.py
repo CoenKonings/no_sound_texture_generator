@@ -130,11 +130,6 @@ if __name__ == "__main__":
         line.set_density(1)
         line.link_rest_time_to_dynamic([2, 0.25])
 
-        if line is lines[5]:
-            print("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
-            print(line.rest_time_range, line.dynamic.value)
-            print("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
-
     piece = Piece(70, (4, 4), NUM_MEASURES, None, lines)
 
 
