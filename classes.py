@@ -162,10 +162,16 @@ class Pitch:
         return type(self)(self.note, self.octave)
 
     def __eq__(self, other):
-        return self.note == other.note and self.octave == other.octave
+        if isinstance(other, Pitch):
+            return self.note == other.note and self.octave == other.octave
+        elif isinstance(other, int):  # If integer is given, disregard octave.
+            return self.note == other
 
     def __ne__(self, other):
-        return self.note != other.note or self.octave != other.octave
+        if isinstance(other, Pitch):
+            return self.note != other.note or self.octave != other.octave
+        elif isinstance(other, int):  # If integer is given, disregard octave
+            return self.note != other
 
     def octave_to_lilypond(self):
         """
@@ -611,6 +617,22 @@ class Dynamic:
 
             self.value += dynamic_step
             self.time_spent_changing += TIMESTEP
+
+        elif isinstance(self.parent, Instrument):
+            if self.parent.pitch == Pitch.REST:
+                return
+
+            texture = self.parent.instrument_group.texture
+            if texture.dynamic.is_changing:
+                self.start_change(
+                    texture.dynamic.target_dynamic,
+                    texture.dynamic.time_to_reach_target
+                )
+            elif texture.dynamic.value != self.value:
+                self.start_change(
+                    texture.dynamic.value,
+                    texture.fade_time  # TODO only works for line textures.
+                )
 
     def change_as_lilypond(self):
         """
