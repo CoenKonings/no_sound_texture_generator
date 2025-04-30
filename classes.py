@@ -80,15 +80,19 @@ class LilyPondDuration:
         measures_left = measures
         lilypond_notation = ""
         duration = 1
+        can_dot = False
 
         while measures_left > 0:
             if measures_left - duration >= 0:
                 measures_left = measures_left - duration
-                lilypond_notation = str(int(1 / duration))
 
-                if measures_left == duration / 2:
+                if lilypond_notation == "":
+                    lilypond_notation = str(int(1 / duration))
+                    can_dot = True
+                elif can_dot:
                     lilypond_notation += "."
-                    measures_left -= duration / 2
+                else:
+                    can_dot = False
 
             if duration < 1 / 1024:
                 raise Exception(

@@ -270,4 +270,5 @@ if __name__ == "__main__":
     piece.start()
     piece.encode_lilypond()
 
+    print(f'Mvmt. 1 pt. 1 length: 29 measures ({round(piece.measures_to_seconds(29))} seconds)')
     print(f'Piece length: {NUM_MEASURES} measures ({round(piece.measures_to_seconds(NUM_MEASURES))} seconds)')
