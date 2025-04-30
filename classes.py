@@ -29,11 +29,13 @@ def duration_to_lilypond(time):
     # Account for dotted notes
     if time % TIMESTEP != 0:
         lilypond_time = 1 / (time / 3 * 4) * 2
-        lilypond_time = str(round(lilypond_time)) + "."
-    else:
-        lilypond_time = str(lilypond_time)
 
-    return lilypond_time
+        if round(lilypond_time) == 7:
+            raise Exception(f"Time is 7? {time}")
+
+        return str(round(lilypond_time)) + "."
+    else:
+        return str(int(1 / time))
 
 
 def debug(x, end="\n"):
@@ -68,6 +70,40 @@ def to_roman_numeral(num):
         (d, num) = divmod(num, n)
         res += roman * d
     return res
+
+
+class LilyPondDuration:
+    def __init__(self, lilypond_duration):
+        self.value = lilypond_duration
+
+    def new_from_time_in_measures(measures):
+        lilypond_notation = ""
+        duration = 1
+
+        while measures > 0:
+            if measures - duration >= 0:
+                measures = measures - duration
+                lilypond_notation = str(1 / duration)
+
+            if measures == duration / 2:
+                lilypond_notation += "."
+                measures -= duration / 2
+
+            if duration < 1 / 32:
+                raise Exception("Durations smaller than 32nd notes not supported.")
+
+            duration /= 2
+
+        return lilypond_notation
+
+    def as_lilypond(self):
+        return self.value
+
+    def in_measures(self):
+        dotted = "." in self.value
+        duration = 1 / int(self.value.replace(".", ""))
+
+        return duration * (1.5 if dotted else 1)
 
 
 class Pitch:
@@ -193,7 +229,7 @@ class LilyPondNote:
             note_after is not None and
             self.pitch == note_after.pitch and
             self.duration == note_after.duration and
-            (len(note_after.events) == 0 or note_after.events == ["~"]) and
+            # (len(note_after.events) == 0 or note_after.events == ["~"]) and
             len(note_after.events_before) == 0 and
             (self.has_tie() or self.pitch.is_rest())
         )
@@ -204,14 +240,24 @@ class LilyPondNote:
         this note, and merging their events.
         """
 
-        self.duration += note.duration
 
         if self.has_tie():
             self.remove_tie()
 
-        self.events += note.events
-        self.delayed_events += note.delayed_events
+        for event in note.events:
+            self.delayed_events.append([
+                self.duration,
+                event
+            ])
+
+        for delayed_event in note.delayed_events:
+            self.delayed_events.append([
+                delayed_event[0] + self.duration,
+                delayed_event[1]
+            ])
+
         self.events_before += note.events_before
+        self.duration += note.duration
 
     def duration_as_lilypond(self):
         """
