@@ -476,32 +476,28 @@ class LilyPondScore:
     def get_measure(self, index):
         return self.measures[index]
 
-    def remove_hairpin(self, time_since_start, current_time):
+    def remove_hairpin(self, start_time, current_time):
         """
         Remove a hairpin dynamic mark that was started time measures ago.
 
         @param time:    How long ago the hairpin started. Time in measures.
         """
-        num_measures = math.floor(time_since_start)
-        num_notes = round((time_since_start % 1) / TIMESTEP)
-        current_measure_length = self.get_last_measure().get_length()
-        current_time_in_measure = current_time % 1
+        if start_time == current_time:
+            print("WARNING: remove_hairpin: start time is current time")
+            return
 
-        time_notes_difference = current_time_in_measure - current_measure_length * 0.125
+        print("BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB")
+        measure_index = math.floor(start_time)
+        note_index = round((start_time % 1) / TIMESTEP)
 
-        if current_time_in_measure == 0 and current_measure_length == 1 / TIMESTEP:
-            num_measures -= 1  # Account for music events which are called before creating a new measure.
+        print(f'current_time:{current_time}')
+        print(f'start_time:{start_time}')
+        print(f'note_index:{note_index}')
+        print(f'measure_index:{measure_index}')
+        print(f'current measure size:{self.get_measure(-1).get_length()}')
+        print("BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB")
 
-        if time_notes_difference != 0:
-            num_notes -= int(time_notes_difference / 0.125)
-
-        note_index = current_measure_length - num_notes
-
-        if note_index < 0:
-            num_measures += 1
-            note_index += int(1 / TIMESTEP)
-
-        self.get_measure(-1 - num_measures).get_note(note_index).remove_hairpin()
+        self.get_measure(measure_index).get_note(note_index).remove_hairpin()
 
 
 class Dynamic:
@@ -525,7 +521,7 @@ class Dynamic:
         self.start_dynamic = None
         self.parent = parent
         self.time_to_reach_target = 0
-        self.time_spent_changing = None
+        self.change_start_time = None
 
     def __str__(self):
         movement_string = "static"
@@ -573,7 +569,12 @@ class Dynamic:
             self.target_dynamic = target
             self.start_dynamic = self.value
             self.time_to_reach_target = time
-            self.time_spent_changing = 0
+
+            if isinstance(self.parent, Instrument):
+                self.change_start_time = self.parent.instrument_group.texture.piece.time
+            else:
+                self.change_start_time = self.parent.piece.time
+
             self.parent.handle_dynamics()
 
     def stop_change(self):
@@ -589,7 +590,7 @@ class Dynamic:
         self.target_dynamic = None
         self.start_dynamic = None
         self.time_to_reach_target = 0
-        self.time_spent_changing = None
+        self.change_start_time = None
         debug(f"{self.parent} reached dynamic", end="")
 
     def reached_target(self, step_size):
@@ -616,7 +617,6 @@ class Dynamic:
                 return
 
             self.value += dynamic_step
-            self.time_spent_changing += TIMESTEP
 
         elif isinstance(self.parent, Instrument):
             if self.parent.pitch == Pitch.REST:
@@ -834,8 +834,12 @@ class Instrument:
             self.dynamic.start_dynamic == self.dynamic.value and
             not self.dynamic.is_changing
         ):
+            if "bariton" in self.name:
+                print("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+                print(f"{self.name} REMOVES HAIRPIN AT {self.dynamic.change_start_time}")
+                print("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
             self.score.remove_hairpin(
-                self.dynamic.time_spent_changing,
+                self.dynamic.change_start_time,
                 self.instrument_group.texture.piece.time
             )
         else:
