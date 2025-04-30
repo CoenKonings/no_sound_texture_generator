@@ -495,10 +495,6 @@ class LilyPondScore:
             num_measures += 1
             note_index += int(1 / TIMESTEP)
 
-        print("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
-        print(time_since_start, num_measures, note_index, current_measure_length, current_time_in_measure)
-        print("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
-
         self.get_measure(-1 - num_measures).get_note(note_index).remove_hairpin()
 
 
@@ -816,8 +812,6 @@ class Instrument:
             self.dynamic.start_dynamic == self.dynamic.value and
             not self.dynamic.is_changing
         ):
-            if "sopsax 2" in self.name:
-                debug(f"{self} removing hairpin from {self.dynamic.time_spent_changing} measures ago.")
             self.score.remove_hairpin(
                 self.dynamic.time_spent_changing,
                 self.instrument_group.texture.piece.time
