@@ -241,7 +241,7 @@ if __name__ == "__main__":
     # This ensures the new inst_grps dictionary is created before the
     # program continues.
     piece.events = music_events
-    piece.start(30)
+    piece.start(min(30, NUM_MEASURES))
 
 
     # Composition: Movement 1 part 2 (breaking down)

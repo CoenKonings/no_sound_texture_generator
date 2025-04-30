@@ -76,25 +76,28 @@ class LilyPondDuration:
     def __init__(self, lilypond_duration):
         self.value = lilypond_duration
 
-    def new_from_time_in_measures(measures):
+    def new_from_measures(measures):
+        measures_left = measures
         lilypond_notation = ""
         duration = 1
 
-        while measures > 0:
-            if measures - duration >= 0:
-                measures = measures - duration
-                lilypond_notation = str(1 / duration)
+        while measures_left > 0:
+            if measures_left - duration >= 0:
+                measures_left = measures_left - duration
+                lilypond_notation = str(int(1 / duration))
 
-            if measures == duration / 2:
-                lilypond_notation += "."
-                measures -= duration / 2
+                if measures_left == duration / 2:
+                    lilypond_notation += "."
+                    measures_left -= duration / 2
 
-            if duration < 1 / 32:
-                raise Exception("Durations smaller than 32nd notes not supported.")
+            if duration < 1 / 1024:
+                raise Exception(
+                    f"Durations smaller than 1024th notes not supported. Input: {measures}, duration: {duration}"
+                )
 
             duration /= 2
 
-        return lilypond_notation
+        return LilyPondDuration(lilypond_notation)
 
     def as_lilypond(self):
         return self.value
@@ -209,10 +212,11 @@ class LilyPondNote:
             self.add_event(event)
 
         self.delayed_events = []
+        self.end_events = []
 
     def __str__(self):
         note = str(self.pitch) + str(self.duration_as_lilypond())
-        return " ".join(self.events_before) + " " + self.delayed_events_string() + note + " " + " ".join(self.events)
+        return " ".join(self.events_before) + " " + self.delayed_events_string() + " " + self.end_events_string() + note + " " + " ".join(self.events)
 
     def has_tie(self):
         return "~" in self.events
@@ -231,7 +235,8 @@ class LilyPondNote:
             self.duration == note_after.duration and
             # (len(note_after.events) == 0 or note_after.events == ["~"]) and
             len(note_after.events_before) == 0 and
-            (self.has_tie() or self.pitch.is_rest())
+            (self.has_tie() or self.pitch.is_rest()) and
+            len(self.end_events) == 0
         )
 
     def merge(self, note):
@@ -241,21 +246,25 @@ class LilyPondNote:
         """
 
 
-        if self.has_tie():
+        if self.has_tie() and not note.has_tie():
             self.remove_tie()
+
+        if note.has_tie():
+            note.remove_tie()
 
         for event in note.events:
             self.delayed_events.append([
-                self.duration,
+                LilyPondDuration.new_from_measures(self.duration),
                 event
             ])
 
         for delayed_event in note.delayed_events:
             self.delayed_events.append([
-                delayed_event[0] + self.duration,
+                LilyPondDuration.new_from_measures(delayed_event[0].in_measures() + self.duration),
                 delayed_event[1]
             ])
 
+        self.end_events = note.end_events
         self.events_before += note.events_before
         self.duration += note.duration
 
@@ -284,8 +293,17 @@ class LilyPondNote:
         events_string = ""
 
         for event in self.delayed_events:
-            delay_time = duration_to_lilypond(event[0])
+            delay_time = event[0].as_lilypond()
             events_string += f'\\after {delay_time} {event[1]} '
+
+        return events_string
+
+    def end_events_string(self):
+        events_string = ""
+
+        for event in self.end_events:
+            delay_time = str(self.duration_as_lilypond() * 2) + "."
+            events_string += f'\\after {delay_time} {event} '
 
         return events_string
 
@@ -457,15 +475,27 @@ class LilyPondScore:
         num_measures = math.floor(time_since_start)
         num_notes = round((time_since_start % 1) / TIMESTEP)
         current_measure_length = self.get_last_measure().get_length()
+        current_time_in_measure = current_time % 1
 
-        if current_measure_length == 8 and current_time % 1 == 0:
-            num_measures -= 1
-            num_notes += 8
+        time_notes_difference = current_time_in_measure - current_measure_length * 0.125
 
-        if current_measure_length < num_notes:
-            num_notes -= current_measure_length
+        if current_time_in_measure == 0 and current_measure_length == 1 / TIMESTEP:
+            num_measures -= 1  # Account for music events which are called before creating a new measure.
 
-        self.get_measure(-1 - num_measures).get_note(-num_notes).remove_hairpin()
+        if time_notes_difference != 0:
+            num_notes -= int(time_notes_difference / 0.125)
+
+        note_index = current_measure_length - num_notes
+
+        if note_index < 0:
+            num_measures += 1
+            note_index += int(1 / TIMESTEP)
+
+        print("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+        print(time_since_start, num_measures, note_index, current_measure_length, current_time_in_measure)
+        print("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+
+        self.get_measure(-1 - num_measures).get_note(note_index).remove_hairpin()
 
 
 class Dynamic:
@@ -513,7 +543,7 @@ class Dynamic:
 
         return f'\\{dynamic_dict[round(value)]}'
 
-    def start_change(self, target, time):
+    def start_change(self, target, time, start_dynamic=None):
         """
         Start a dynamic change, going from the current dynamic to the target
         dynamic, either by gradual (de)crescendo (time > 0) or sudden change
@@ -524,15 +554,21 @@ class Dynamic:
         @param time:    The time the change should take in measures (e.g. a
                         quarter note is 0.25, a dotted whole note is 1.5.)
         """
-        if self.is_changing:
+        if start_dynamic is None:
+            start_dynamic = self.value
+
+        if self.is_changing and self.value < start_dynamic:
+            return
+        elif self.is_changing:
             self.stop_change()
 
-        self.is_changing = True
-        self.target_dynamic = target
-        self.start_dynamic = self.value
-        self.time_to_reach_target = time
-        self.time_spent_changing = 0
-        self.parent.handle_dynamics()
+        if self.value != target:
+            self.is_changing = True
+            self.target_dynamic = target
+            self.start_dynamic = self.value
+            self.time_to_reach_target = time
+            self.time_spent_changing = 0
+            self.parent.handle_dynamics()
 
     def stop_change(self):
         """
@@ -548,7 +584,7 @@ class Dynamic:
         self.start_dynamic = None
         self.time_to_reach_target = 0
         self.time_spent_changing = None
-        debug(f"{self.parent} reached target dynamic", end="")
+        debug(f"{self.parent} reached dynamic", end="")
 
     def reached_target(self, step_size):
         if not self.is_changing:
@@ -696,6 +732,7 @@ class Instrument:
         TODO: This function could use a cleanup, mainly by splitting it into
         several functions for legibility.
         """
+
         if self.play_time is not None:
             self.play_time += TIMESTEP
 
@@ -769,15 +806,14 @@ class Instrument:
         # Dynamics marks at a rest are added to the previous note.
         if self.pitch.note == -1:
             last_note = self.score.get_last_note()
-            last_note.delayed_events.append([
-                last_note.duration * 0.75,
-                self.dynamic.as_lilypond()
-            ])
+            last_note.end_events.append(self.dynamic.as_lilypond())
         elif (
             self.dynamic.start_dynamic is not None and
             self.dynamic.start_dynamic == self.dynamic.value and
             not self.dynamic.is_changing
         ):
+            if "sopsax 2" in self.name:
+                debug(f"{self} removing hairpin from {self.dynamic.time_spent_changing} measures ago.")
             self.score.remove_hairpin(
                 self.dynamic.time_spent_changing,
                 self.instrument_group.texture.piece.time
@@ -1149,7 +1185,8 @@ class Line(Texture):
                     if self.dynamic.is_changing:
                         instrument.dynamic.start_change(
                             self.dynamic.target_dynamic,
-                            self.dynamic.time_to_reach_target
+                            self.dynamic.time_to_reach_target,
+                            self.dynamic.start_dynamic
                         )
                     else:
                         instrument.dynamic.start_change(
