@@ -772,7 +772,8 @@ class Instrument:
 
         if self.is_playing and self.rested:
             self.rested = False
-            self.events += self.after_rest_events
+            self.events += [x["event"] for x in self.after_rest_events if not x["place_before"]]
+            self.events_before += [x["event"] for x in self.after_rest_events if x["place_before"]]
             self.after_rest_events = []
         elif not self.is_playing and not self.rested:
             self.rested = True
@@ -873,7 +874,10 @@ class Instrument:
         Add a note event after the next rest.
         TODO: implement place before.
         """
-        self.after_rest_events.append(event)
+        self.after_rest_events.append({
+            "event": event,
+            "place_before": place_before
+        })
 
 
 class InstrumentGroup:
@@ -1401,6 +1405,10 @@ class Piece:
         """
         for texture in self.textures:
             texture.add_note_event(event, place_before)
+
+    def add_event_after_rest(self, event, place_before=True):
+        for texture in self.textures:
+            texture.add_event_after_rest(event, place_before)
 
     def add_texture(self, texture):
         self.textures.append(texture)
