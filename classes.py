@@ -17,6 +17,17 @@ import time
 TIMESTEP = 0.125  # TODO: move to Piece class
 FOLDER_NAME = '../no_sound_lilypond/notes/movement-1'  # TODO: move to Piece.encode_lilypond parameter
 DEBUG_MODE = False
+SHOW_WARNINGS = False
+
+
+def debug(x, end="\n"):
+    if DEBUG_MODE:
+        print(x, end=end)
+
+
+def warn(x, end="\n"):
+    if SHOW_WARNINGS:
+        print(x, end=end)
 
 
 def duration_to_lilypond(time):
@@ -36,11 +47,6 @@ def duration_to_lilypond(time):
         return str(round(lilypond_time)) + "."
     else:
         return str(int(1 / time))
-
-
-def debug(x, end="\n"):
-    if DEBUG_MODE:
-        print(x, end=end)
 
 
 def to_roman_numeral(num):
@@ -483,20 +489,11 @@ class LilyPondScore:
         @param time:    How long ago the hairpin started. Time in measures.
         """
         if start_time == current_time:
-            print("WARNING: remove_hairpin: start time is current time")
+            warn("WARNING: remove_hairpin: start time is current time")
             return
 
-        print("BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB")
         measure_index = math.floor(start_time)
         note_index = round((start_time % 1) / TIMESTEP)
-
-        print(f'current_time:{current_time}')
-        print(f'start_time:{start_time}')
-        print(f'note_index:{note_index}')
-        print(f'measure_index:{measure_index}')
-        print(f'current measure size:{self.get_measure(-1).get_length()}')
-        print("BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB")
-
         self.get_measure(measure_index).get_note(note_index).remove_hairpin()
 
 
@@ -834,10 +831,6 @@ class Instrument:
             self.dynamic.start_dynamic == self.dynamic.value and
             not self.dynamic.is_changing
         ):
-            if "bariton" in self.name:
-                print("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
-                print(f"{self.name} REMOVES HAIRPIN AT {self.dynamic.change_start_time}")
-                print("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
             self.score.remove_hairpin(
                 self.dynamic.change_start_time,
                 self.instrument_group.texture.piece.time
