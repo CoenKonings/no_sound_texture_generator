@@ -1,9 +1,5 @@
 import sys
 from classes import *
-import pprint
-
-
-pp = pprint.PrettyPrinter(indent=4)
 
 
 """
@@ -278,6 +274,9 @@ if __name__ == "__main__":
         MusicEvent(34, inst_grps["euphoniums2"].dynamic.start_change, [Dynamic.MP, 2]),
         MusicEvent(34, inst_grps["esbasstubas"].dynamic.start_change, [Dynamic.MP, 2]),
         MusicEvent(34, inst_grps["besbasstubas"].dynamic.start_change, [Dynamic.MP, 2]),
+
+        # Start removing players from lowest notes, creating a "high pass" effect.
+        MusicEvent(36, piece.remove_player_from_bottom),
     ]
 
     piece.events = music_events

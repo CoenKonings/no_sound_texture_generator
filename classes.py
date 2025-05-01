@@ -11,6 +11,10 @@ import math
 from copy import copy, deepcopy
 from pathlib import Path
 import time
+import pprint
+
+
+pp = pprint.PrettyPrinter(indent=4)
 
 
 # Globals to easily edit some parameters.
@@ -159,8 +163,6 @@ class Pitch:
 
         return Pitch(Pitch.NOTE_NAMES.index(note_name), octave)
 
-
-
     def __str__(self):
         return self.to_lilypond()
 
@@ -178,6 +180,36 @@ class Pitch:
             return self.note != other.note or self.octave != other.octave
         elif isinstance(other, int):  # If integer is given, disregard octave
             return self.note != other
+
+    def __lt__(self, other):
+        """
+        NOTE: rests are considered the lowest note, regardless of octave.
+        """
+        if isinstance(other, Pitch):
+            return (
+                self.note < other.note and self.octave == other.octave or
+                other.note != Pitch.REST and (
+                    self.octave < other.octave or
+                    self.note == Pitch.REST
+                )
+            )
+        elif isinstance(other, int):  # If integer is given, disregard octave.
+            return self.note < other
+
+    def __gt__(self, other):
+        """
+        NOTE: rests are considered the lowest note, regardless of octave.
+        """
+        if isinstance(other, Pitch):
+            return (
+                self.note > other.note and self.octave == other.octave or
+                self.pitch != Pitch.REST and (
+                    self.octave > other.octave or
+                    other.note == Pitch.REST
+                )
+            )
+        elif isinstance(other, int):  # If integer is given, disregard octave.
+            return self.note < other
 
     def octave_to_lilypond(self):
         """
@@ -919,6 +951,12 @@ class InstrumentGroup:
     def __str__(self):
         return f'[Instrument group: {self.name}]'
 
+    def __gt__(self, other):
+        return self.get_num_instruments() > other.get_num_instruments()
+
+    def __lt__(self, other):
+        return self.get_num_instruments() < other.get_num_instruments()
+
     def print_instruments(self):
         for instrument in self.instruments:
             print(instrument)
@@ -1140,6 +1178,26 @@ class Texture:
         for instrument_group in self.instrument_groups:
             instrument_group.add_event_after_rest(event, placeBefore=placeBefore)
 
+    def remove_player(self):
+        if self.density > self.max_playing:
+            self.set_density(self.density - 1)
+        elif self.max_playing > self.density:
+            self.set_max_playing(self.max_playing - 1)
+        else:
+            self.set_density(self.density - 1)
+            self.set_max_playing(self.max_playing - 1)
+
+    def get_num_instruments(self):
+        num_instruments = 0
+
+        for instrument_group in self.instrument_groups:
+            num_instruments += instrument_group.get_num_instruments()
+
+        return num_instruments
+
+    def largest_instrument_group_size(self):
+        return max(self.instrument_groups).get_num_instruments()
+
 
 class Line(Texture):
     """
@@ -1268,10 +1326,23 @@ class Line(Texture):
             new_line.pitches = deepcopy(self.pitches)
             instrument_group.texture = new_line
             new_line.piece.textures.append(new_line)
+            new_line.set_density(
+                min(new_line.density, new_line.largest_instrument_group_size())
+            )
+            new_line.set_max_playing(
+                min(new_line.max_playing, new_line.get_num_instruments())
+            )
 
             new_lines.append(new_line)
 
         self.instrument_groups = [self.instrument_groups[-1]]
+        self.set_density(
+            min(self.density, self.largest_instrument_group_size())
+        )
+        self.set_max_playing(
+            min(self.max_playing, self.get_num_instruments())
+        )
+
         new_lines.append(self)
 
         return new_lines
@@ -1412,3 +1483,30 @@ class Piece:
 
     def add_texture(self, texture):
         self.textures.append(texture)
+
+    def remove_player_from_top(self):
+        """
+        Remove one player from the active texture with the highest pitch,
+        determined by highest pitch in texture.pitches.
+        """
+        raise Exception("Piece.remove_player_from_top not implemented yet.")
+
+    def remove_player_from_bottom(self):
+        """
+        Remove one player from the active texture with the lowest pitch,
+        determined by lowest pitch in texture.pitches.
+        """
+        lowest_pitch_texture = None
+
+        for texture in self.textures:
+            if (
+                texture.density > 0 and
+                texture.max_playing > 0
+            ):
+                if (
+                    lowest_pitch_texture is None or
+                    min(texture.pitches) < min(lowest_pitch_texture.pitches)
+                ):
+                    lowest_pitch_texture = texture
+
+        lowest_pitch_texture.remove_player()
