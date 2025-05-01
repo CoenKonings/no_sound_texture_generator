@@ -22,7 +22,8 @@ TIMESTEP = 0.125  # TODO: move to Piece class
 FOLDER_NAME = '../no_sound_lilypond/notes/movement-1'  # TODO: move to Piece.encode_lilypond parameter
 DEBUG_MODE = False
 SHOW_WARNINGS = False
-FONT_SIZE_RANGE = (-4, 4)
+# FONT_SIZE_RANGE = (-4, 15)
+FONT_SIZE_RANGE = None
 
 
 def debug(x, end="\n"):
@@ -294,7 +295,7 @@ class LilyPondNote:
             self.pitch == note_after.pitch and
             self.duration == note_after.duration and
             # (len(note_after.events) == 0 or note_after.events == ["~"]) and
-            len(note_after.events_before) == 0 and
+            # len(note_after.events_before) == 0 and
             (self.has_tie() or self.pitch.is_rest()) and
             len(self.end_events) == 0
         )
@@ -322,6 +323,12 @@ class LilyPondNote:
             self.delayed_events.append([
                 LilyPondDuration.new_from_measures(delayed_event[0].in_measures() + self.duration),
                 delayed_event[1]
+            ])
+
+        for event_before in note.events_before:
+            self.delayed_events.append([
+                LilyPondDuration.new_from_measures(self.duration),
+                event_before
             ])
 
         self.end_events = note.end_events
@@ -652,6 +659,11 @@ class Dynamic:
         if self.is_changing:
             num_steps = self.time_to_reach_target / TIMESTEP
             dynamic_step = (self.target_dynamic - self.start_dynamic) / num_steps
+
+            if isinstance(self.parent, Instrument) and FONT_SIZE_RANGE is not None:
+                font_size_diff = FONT_SIZE_RANGE[1] - FONT_SIZE_RANGE[0]
+                font_size = self.value / 7 * font_size_diff + FONT_SIZE_RANGE[0]
+                self.parent.events_before.append(f"\\override NoteHead.font-size = {font_size}")
 
             if self.reached_target(dynamic_step):
                 self.stop_change()
