@@ -224,6 +224,7 @@ class LilyPondNote:
         self.duration = duration
         self.events_before = events_before
         self.events = []
+
         for event in events:
             self.add_event(event)
 
@@ -232,6 +233,16 @@ class LilyPondNote:
 
     def __str__(self):
         note = str(self.pitch) + str(self.duration_as_lilypond())
+
+        if (
+            note == "r1" and
+            len(self.events_before) == 0 and
+            len(self.delayed_events) == 0 and
+            len(self.events) == 0 and
+            len(self.end_events) == 0
+        ):
+            note = "R1"
+
         return " ".join(self.events_before) + " " + self.delayed_events_string() + " " + self.end_events_string() + note + " " + " ".join(self.events)
 
     def has_tie(self):
