@@ -246,24 +246,34 @@ if __name__ == "__main__":
 
     # Composition: Movement 1 part 2 (breaking down)
     music_events = [
-        MusicEvent(30, inst_grps["altsaxes"].dynamic.start_change, [Dynamic.MP, 1]),
-        MusicEvent(30, inst_grps["tenorsaxes"].dynamic.start_change, [Dynamic.MP, 1]),
-        MusicEvent(30, inst_grps["baritonesaxes"].dynamic.start_change, [Dynamic.MP, 1]),
-        MusicEvent(30, inst_grps["basssaxes"].dynamic.start_change, [Dynamic.MP, 1]),
-        MusicEvent(30, inst_grps["sopsaxes"].dynamic.start_change, [Dynamic.MP, 1]),
-        MusicEvent(30, inst_grps["flugelhorns2"].dynamic.start_change, [Dynamic.MP, 1]),
-        MusicEvent(30, inst_grps["flugelhorns3"].dynamic.start_change, [Dynamic.MP, 1]),
+        # Scherp koper diminuendo
         MusicEvent(30, inst_grps["horns"].dynamic.start_change, [Dynamic.MP, 2]),
-        MusicEvent(30, inst_grps["trumpets"].dynamic.start_change, [Dynamic.MP, 1]),
-        MusicEvent(30, inst_grps["trombones"].dynamic.start_change, [Dynamic.MP, 3]),
-        MusicEvent(30, inst_grps["euphoniums1"].dynamic.start_change, [Dynamic.MP, 2]),
-        MusicEvent(30, inst_grps["euphoniums2"].dynamic.start_change, [Dynamic.MP, 2]),
-        MusicEvent(30, inst_grps["esbasstubas"].dynamic.start_change, [Dynamic.MP, 4]),
-        MusicEvent(30, inst_grps["besbasstubas"].dynamic.start_change, [Dynamic.MP, 4]),
+        MusicEvent(30, inst_grps["trumpets"].dynamic.start_change, [Dynamic.MP, 2]),
+        MusicEvent(30, inst_grps["trombones"].dynamic.start_change, [Dynamic.MP, 2]),
+        MusicEvent(30, inst_grps["basstrombones"].dynamic.start_change, [Dynamic.MP, 2]),
 
-        MusicEvent(31, inst_grps["flugelhorns1"].dynamic.start_change, [Dynamic.MP, 2]),
-        MusicEvent(32, inst_grps["alto horns"].dynamic.start_change, [Dynamic.MP, 1]),
-        MusicEvent(32, inst_grps["basstrombones"].set_rest_time, [2]),
+        # Saxofoons diminuendo
+        MusicEvent(31, inst_grps["sopsaxes"].dynamic.start_change, [Dynamic.P, 4]),
+        MusicEvent(31, inst_grps["altsaxes"].dynamic.start_change, [Dynamic.P, 4]),
+        MusicEvent(31, inst_grps["tenorsaxes"].dynamic.start_change, [Dynamic.P, 4]),
+        MusicEvent(31, inst_grps["baritonesaxes"].dynamic.start_change, [Dynamic.P, 4]),
+        MusicEvent(31, inst_grps["basssaxes"].dynamic.start_change, [Dynamic.P, 4]),
+
+        # Scherp koper crescendo
+        MusicEvent(30, inst_grps["horns"].dynamic.start_change, [Dynamic.F, 2]),
+        MusicEvent(30, inst_grps["trumpets"].dynamic.start_change, [Dynamic.F, 2]),
+        MusicEvent(30, inst_grps["trombones"].dynamic.start_change, [Dynamic.F, 2]),
+        MusicEvent(30, inst_grps["basstrombones"].dynamic.start_change, [Dynamic.F, 2]),
+
+        # Zacht koper diminuendo
+        MusicEvent(33, inst_grps["flugelhorns1"].dynamic.start_change, [Dynamic.MP, 2]),
+        MusicEvent(33, inst_grps["flugelhorns2"].dynamic.start_change, [Dynamic.MP, 2]),
+        MusicEvent(33, inst_grps["flugelhorns3"].dynamic.start_change, [Dynamic.MP, 2]),
+        MusicEvent(33, inst_grps["alto horns"].dynamic.start_change, [Dynamic.MP, 2]),
+        MusicEvent(33, inst_grps["euphoniums1"].dynamic.start_change, [Dynamic.MP, 2]),
+        MusicEvent(33, inst_grps["euphoniums2"].dynamic.start_change, [Dynamic.MP, 2]),
+        MusicEvent(33, inst_grps["esbasstubas"].dynamic.start_change, [Dynamic.MP, 2]),
+        MusicEvent(33, inst_grps["besbasstubas"].dynamic.start_change, [Dynamic.MP, 2]),
     ]
 
     piece.events = music_events
