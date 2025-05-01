@@ -686,12 +686,14 @@ class Instrument:
         self.is_stopping = False
         self.instrument_group = instrument_group
         self.play_time = None
-        self.dynamic = None
+        self.dynamic = None  # Dynamics cannot be manually assigned, use texture dynamics instead.
         self.allowed_to_play = False
-        self.events = []
-        self.events_before = []
+        self.events = []  # Instructions like dynamics or text.
+        self.events_before = []  # Instructions that should be placed before a note in LilyPond notation.
         self.score = LilyPondScore()
         self.pitch = Pitch(-1, 0)
+        self.after_rest_events = []  # Events that should happen immediately after a rest.
+        self.rested = True  # Track if the instrument played a rest.
 
     def __str__(self):
         return f'[Instrument: {self.name}]'
@@ -767,6 +769,13 @@ class Instrument:
             self.play_time += TIMESTEP
 
         step_callback(self)
+
+        if self.is_playing and self.rested:
+            self.rested = False
+            self.events += self.after_rest_events
+            self.after_rest_events = []
+        elif not self.is_playing and not self.rested:
+            self.rested = True
 
         # Dynamic is none if instrument has not started playing yet.
         if self.dynamic is not None:
@@ -859,6 +868,13 @@ class Instrument:
         else:
             self.events.append(event)
 
+    def add_event_after_rest(self, event, place_before=False):
+        """
+        Add a note event after the next rest.
+        TODO: implement place before.
+        """
+        self.after_rest_events.append(event)
+
 
 class InstrumentGroup:
     def __init__(
@@ -949,6 +965,10 @@ class InstrumentGroup:
 
     def get_num_instruments(self):
         return len(self.instruments)
+
+    def add_event_after_rest(self, event, place_before=False):
+        for instrument in self.instruments:
+            instrument.add_event_after_rest(event, place_before=place_before)
 
 
 class Texture:
@@ -1111,6 +1131,10 @@ class Texture:
     def stop(self):
         self.set_density(0)
         self.set_max_playing(0)
+
+    def add_event_after_rest(self, event, placeBefore=False):
+        for instrument_group in self.instrument_groups:
+            instrument_group.add_event_after_rest(event, placeBefore=placeBefore)
 
 
 class Line(Texture):
