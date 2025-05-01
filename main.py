@@ -215,6 +215,7 @@ if __name__ == "__main__":
         MusicEvent(29, lines[0].set_max_playing, [10]),
 
         MusicEvent(30, piece.add_note_event, ["\\bar \"||\""]),
+        MusicEvent(30, piece.add_note_event, ["\\mark \\default"]),
     ]
 
     # All lines start increasing dynamics from measure 19 to 29
@@ -274,9 +275,10 @@ if __name__ == "__main__":
         MusicEvent(34, inst_grps["euphoniums2"].dynamic.start_change, [Dynamic.MP, 2]),
         MusicEvent(34, inst_grps["esbasstubas"].dynamic.start_change, [Dynamic.MP, 2]),
         MusicEvent(34, inst_grps["besbasstubas"].dynamic.start_change, [Dynamic.MP, 2]),
+    ]
 
-        # Start removing players from lowest notes, creating a "high pass" effect.
-        MusicEvent(36, piece.remove_player_from_bottom),
+    music_events += [
+        MusicEvent(36 + i * (16 / piece.get_num_instruments()), piece.remove_player_from_bottom) for i in range(piece.get_num_instruments() - 1)
     ]
 
     piece.events = music_events

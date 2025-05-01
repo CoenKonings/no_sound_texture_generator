@@ -22,6 +22,7 @@ TIMESTEP = 0.125  # TODO: move to Piece class
 FOLDER_NAME = '../no_sound_lilypond/notes/movement-1'  # TODO: move to Piece.encode_lilypond parameter
 DEBUG_MODE = False
 SHOW_WARNINGS = False
+FONT_SIZE_RANGE = (-4, 4)
 
 
 def debug(x, end="\n"):
@@ -1510,3 +1511,11 @@ class Piece:
                     lowest_pitch_texture = texture
 
         lowest_pitch_texture.remove_player()
+
+    def get_num_instruments(self):
+        num_instruments = 0
+
+        for texture in self.textures:
+            num_instruments += texture.get_num_instruments()
+
+        return num_instruments
