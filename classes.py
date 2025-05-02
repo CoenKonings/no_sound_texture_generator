@@ -1529,7 +1529,8 @@ class Piece:
                 ):
                     lowest_pitch_texture = texture
 
-        lowest_pitch_texture.remove_player()
+        if lowest_pitch_texture is not None:
+            lowest_pitch_texture.remove_player()
 
     def get_num_instruments(self):
         num_instruments = 0
