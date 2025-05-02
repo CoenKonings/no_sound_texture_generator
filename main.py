@@ -260,21 +260,21 @@ if __name__ == "__main__":
         MusicEvent(32, inst_grps["basssaxes"].dynamic.start_change, [Dynamic.P, 4]),
 
         # Scherp koper crescendo
-        MusicEvent(34, inst_grps["horns"].dynamic.start_change, [Dynamic.F, 2]),
-        MusicEvent(34, inst_grps["trumpets"].dynamic.start_change, [Dynamic.F, 2]),
-        MusicEvent(34, inst_grps["trombones"].dynamic.start_change, [Dynamic.F, 2]),
-        MusicEvent(34, inst_grps["basstrombones"].dynamic.start_change, [Dynamic.F, 2]),
-        MusicEvent(34, trumpets.add_event_after_rest, ["^\"remove mute\""]),
+        MusicEvent(35, inst_grps["horns"].dynamic.start_change, [Dynamic.F, 2]),
+        MusicEvent(35, inst_grps["trumpets"].dynamic.start_change, [Dynamic.F, 2]),
+        MusicEvent(35, inst_grps["trombones"].dynamic.start_change, [Dynamic.F, 2]),
+        MusicEvent(35, inst_grps["basstrombones"].dynamic.start_change, [Dynamic.F, 2]),
+        MusicEvent(35, trumpets.add_event_after_rest, ["^\"remove mute\""]),
 
         # Zacht koper diminuendo
-        MusicEvent(34, inst_grps["flugelhorns1"].dynamic.start_change, [Dynamic.MP, 2]),
-        MusicEvent(34, inst_grps["flugelhorns2"].dynamic.start_change, [Dynamic.MP, 2]),
-        MusicEvent(34, inst_grps["flugelhorns3"].dynamic.start_change, [Dynamic.MP, 2]),
-        MusicEvent(34, inst_grps["alto horns"].dynamic.start_change, [Dynamic.MP, 2]),
-        MusicEvent(34, inst_grps["euphoniums1"].dynamic.start_change, [Dynamic.MP, 2]),
-        MusicEvent(34, inst_grps["euphoniums2"].dynamic.start_change, [Dynamic.MP, 2]),
-        MusicEvent(34, inst_grps["esbasstubas"].dynamic.start_change, [Dynamic.MP, 2]),
-        MusicEvent(34, inst_grps["besbasstubas"].dynamic.start_change, [Dynamic.MP, 2]),
+        MusicEvent(35, inst_grps["flugelhorns1"].dynamic.start_change, [Dynamic.MP, 2]),
+        MusicEvent(35, inst_grps["flugelhorns2"].dynamic.start_change, [Dynamic.MP, 2]),
+        MusicEvent(35, inst_grps["flugelhorns3"].dynamic.start_change, [Dynamic.MP, 2]),
+        MusicEvent(35, inst_grps["alto horns"].dynamic.start_change, [Dynamic.MP, 2]),
+        MusicEvent(35, inst_grps["euphoniums1"].dynamic.start_change, [Dynamic.MP, 2]),
+        MusicEvent(35, inst_grps["euphoniums2"].dynamic.start_change, [Dynamic.MP, 2]),
+        MusicEvent(35, inst_grps["esbasstubas"].dynamic.start_change, [Dynamic.MP, 2]),
+        MusicEvent(35, inst_grps["besbasstubas"].dynamic.start_change, [Dynamic.MP, 2]),
     ]
 
     music_events += [

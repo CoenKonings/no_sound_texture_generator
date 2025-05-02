@@ -608,8 +608,11 @@ class Dynamic:
         if start_dynamic is None:
             start_dynamic = self.value
 
+        # Prevent starting a change if an instrument is still fading in.
+        # TODO kind of hacky, find better way.
         if self.is_changing and self.value < start_dynamic:
             return
+        # If not on fade-in, stop the current dynamic change to start a new one.
         elif self.is_changing:
             self.stop_change()
 
