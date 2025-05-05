@@ -19,11 +19,15 @@ pp = pprint.PrettyPrinter(indent=4)
 
 # Globals to easily edit some parameters.
 TIMESTEP = 0.125  # TODO: move to Piece class
-FOLDER_NAME = '../no_sound_lilypond/notes/movement-1'  # TODO: move to Piece.encode_lilypond parameter
+# FOLDER_NAME = '../no_sound_lilypond/notes/movement-1'  # TODO: move to Piece.encode_lilypond parameter
+FOLDER_NAME = '../no_sound_lilypond/notes/movement-2'
+# FOLDER_NAME = None
 DEBUG_MODE = False
 SHOW_WARNINGS = False
-FONT_SIZE_RANGE = (-4, 10)
-# FONT_SIZE_RANGE = None
+# FONT_SIZE_RANGE = (-4, 20)
+FONT_SIZE_RANGE = None
+# MIDI_EXPR_RANGE = (0, 1)
+MIDI_EXPR_RANGE = None
 
 
 def debug(x, end="\n"):
@@ -326,7 +330,7 @@ class LilyPondNote:
             ])
 
         for event_before in note.events_before:
-            if "font-size" not in event_before:
+            if "font-size" not in event_before and "midiExpression" not in event_before:
                 self.delayed_events.append([
                     LilyPondDuration.new_from_measures(self.duration),
                     event_before
@@ -380,7 +384,7 @@ class LilyPondNote:
         Add a tie to the next note.
         """
         if "~" not in self.events:
-            self.events.append("~")
+            self.events.insert(0, "~")
 
     def remove_hairpin(self):
         """
@@ -424,15 +428,7 @@ class LilyPondMeasure:
     def get_note(self, index):
         return self.notes[index]
 
-    def lilypond_encode(self):
-        """
-        First merge the notes in this measure, then convert it to readable
-        lilypond code.
-
-        TODO    This should be split into a number of separate functions, but
-                more important features will get priority.
-        """
-        done = False
+    def merge_notes(self):
         i = 0
         timescale = TIMESTEP * 2 # Scale at which notes will be merged.
         time_in_measure = 0
@@ -440,7 +436,7 @@ class LilyPondMeasure:
 
         # Merge notes if possible. Ensure eighth note groupings and the center
         # of the measure remain visible.
-        while not done:
+        while timescale <= 1:
             current_note = self.notes[i]
             next_note = None if i + 1 == len(self.notes) else self.notes[i + 1]
             # Notes should be merged if they can be merged and merging them
@@ -468,9 +464,16 @@ class LilyPondMeasure:
                 else:
                     merged_this_round = False
 
-                if timescale > 1:
-                    done = True
 
+    def lilypond_encode(self):
+        """
+        First merge the notes in this measure, then convert it to readable
+        lilypond code.
+
+        TODO    This should be split into a number of separate functions, but
+                more important features will get priority.
+        """
+        self.merge_notes()  # Comment this for midi velocity
         # This is where the actual encoding begins.
         # TODO: everything above this point should be a separate function.
         lilypond_string = ""
@@ -479,6 +482,13 @@ class LilyPondMeasure:
             lilypond_string += f'{note} '
 
         return lilypond_string + "| "  # Add barline at the end of the measure.
+
+    def is_empty(self):
+        for note in self.notes:
+            if (note.pitch != Pitch.REST):
+                return False
+
+        return True
 
 
 class LilyPondScore:
@@ -547,6 +557,22 @@ class LilyPondScore:
         measure_index = math.floor(start_time)
         note_index = round((start_time % 1) / TIMESTEP)
         self.get_measure(measure_index).get_note(note_index).remove_hairpin()
+
+    def get_num_trailing_empty_measures(self):
+        num_trailing_empty_measures = 0
+
+        for measure in reversed(self.measures):
+            if measure.is_empty():
+                num_trailing_empty_measures += 1
+            else:
+                break
+
+        return num_trailing_empty_measures
+
+    def remove_measures_from_end(self, num_measures):
+        end_index = len(self.measures)
+        start_index = end_index - num_measures
+        del self.measures[start_index:end_index]
 
 
 class Dynamic:
@@ -662,13 +688,26 @@ class Dynamic:
 
         if self.is_changing:
             num_steps = self.time_to_reach_target / TIMESTEP
-            dynamic_step = (self.target_dynamic - self.start_dynamic) / num_steps
+            dynamic_step = None
+
+            if num_steps == 0:
+                dynamic_step = self.target_dynamic - self.value
+            else:
+                dynamic_step = (self.target_dynamic - self.start_dynamic) / num_steps
+
 
             if isinstance(self.parent, Texture) and FONT_SIZE_RANGE is not None:
                 font_size_diff = FONT_SIZE_RANGE[1] - FONT_SIZE_RANGE[0]
                 font_size = self.value / 7 * font_size_diff + FONT_SIZE_RANGE[0]
                 self.parent.add_note_event(
                     f"\\override NoteHead.font-size = {font_size}",
+                    place_before=True
+                )
+            elif isinstance(self.parent, Instrument) and MIDI_EXPR_RANGE is not None:
+                midi_expr_diff = MIDI_EXPR_RANGE[1] - MIDI_EXPR_RANGE[0]
+                midi_expr = self.value / 7 * midi_expr_diff + MIDI_EXPR_RANGE[0]
+                self.parent.add_note_event(
+                    f'\\set midiExpression = {midi_expr}',
                     place_before=True
                 )
 
@@ -843,7 +882,7 @@ class Instrument:
         else:
             previous_note = self.score.get_last_note()
 
-            if (
+            if (  # Comment this if statement for MIDI velocity.
                 previous_note is not None and
                 previous_note.pitch == self.pitch and
                 not self.pitch.is_rest()
@@ -886,7 +925,15 @@ class Instrument:
         time.sleep(0.05)
         filename = self.name.replace(" ", "") + ".ly"
         lilypond_score = ""
-        lilypond_score += "{" + self.score.encode_lilypond() + "}\n"
+        lilypond_score += "{" if FOLDER_NAME is not None else ""
+        lilypond_score += self.score.encode_lilypond()
+        lilypond_score += "}\n" if FOLDER_NAME is not None else "\n"
+
+        if FOLDER_NAME is None:
+            print()
+            print(lilypond_score)
+            print("------------------------------")
+            return
 
         with open(f'{FOLDER_NAME}/{filename}', 'w+') as file:
             file.write(lilypond_score)
@@ -930,6 +977,12 @@ class Instrument:
             "event": event,
             "place_before": place_before
         })
+
+    def get_num_trailing_empty_measures(self):
+        return self.score.get_num_trailing_empty_measures()
+
+    def remove_measures_from_end(self, num_measures):
+        self.score.remove_measures_from_end(num_measures)
 
 
 class InstrumentGroup:
@@ -1031,6 +1084,21 @@ class InstrumentGroup:
     def add_event_after_rest(self, event, place_before=False):
         for instrument in self.instruments:
             instrument.add_event_after_rest(event, place_before=place_before)
+
+    def get_num_trailing_empty_measures(self):
+        num_trailing_empty_measures = self.texture.piece.num_measures
+
+        for instrument in self.instruments:
+            num_trailing_empty_measures = min(
+                num_trailing_empty_measures,
+                instrument.get_num_trailing_empty_measures()
+            )
+
+        return num_trailing_empty_measures
+
+    def remove_measures_from_end(self, num_measures):
+        for instrument in self.instruments:
+            instrument.remove_measures_from_end(num_measures)
 
 
 class Texture:
@@ -1218,6 +1286,21 @@ class Texture:
     def largest_instrument_group_size(self):
         return max(self.instrument_groups).get_num_instruments()
 
+    def get_num_trailing_empty_measures(self):
+        num_trailing_empty_measures = self.piece.num_measures
+
+        for instrument_group in self.instrument_groups:
+            num_trailing_empty_measures = min(
+                num_trailing_empty_measures,
+                instrument_group.get_num_trailing_empty_measures()
+            )
+
+        return num_trailing_empty_measures
+
+    def remove_measures_from_end(self, num_measures):
+        for instrument_group in self.instrument_groups:
+            instrument_group.remove_measures_from_end(num_measures)
+
 
 class Line(Texture):
     """
@@ -1377,6 +1460,9 @@ class Line(Texture):
         self.manual_rest_time = False
         self.rest_time_range = range
 
+    def set_pitches(self, pitches):
+        self.pitches = pitches
+
 
 class MusicEvent:
     """
@@ -1454,10 +1540,27 @@ class Piece:
         for texture in self.textures:
             texture.step(should_start_new_measure)
 
-    def encode_lilypond(self):
-        Path(FOLDER_NAME).mkdir(exist_ok=True)
+    def remove_trailing_empty_measures(self):
+        num_trailing_empty_measures = self.num_measures
+
+        for texture in self.textures:
+            empty = texture.get_num_trailing_empty_measures()
+            num_trailing_empty_measures = min(
+                num_trailing_empty_measures,
+                empty
+            )
+
+        for texture in self.textures:
+            texture.remove_measures_from_end(num_trailing_empty_measures)
+
+    def encode_lilypond(self, remove_trailing_empty_measures=False):
+        if FOLDER_NAME is not None:
+            Path(FOLDER_NAME).mkdir(exist_ok=True)
 
         print("Encoding piece in LilyPond...")
+
+        if remove_trailing_empty_measures:
+            self.remove_trailing_empty_measures()
 
         for texture in self.textures:
             texture.encode_lilypond()
