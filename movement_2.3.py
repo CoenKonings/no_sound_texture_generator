@@ -2,7 +2,7 @@ import sys
 from classes import *
 
 
-FOLDER_NAME = '../no_sound_lilypond/notes/movement-2-generator'
+FOLDER_NAME = '../no_sound_lilypond/notes/movement-2.3'
 
 
 """
@@ -42,85 +42,7 @@ if __name__ == "__main__":
     besbasstubas = InstrumentGroup("besbasstubas", "bes bass", None, 1.5, 3)
 
     lines = {
-        "sopsaxes": Line(
-            [
-                Pitch.new_from_lilypond_notation("a\'\'"),
-                Pitch.new_from_lilypond_notation("b\'\'"),
-            ],
-            Dynamic.P,
-            [sopsaxes],
-            max_playing=1
-        ),
-
-        "flugelhorns1": Line(
-            [
-                Pitch.new_from_lilypond_notation("e\'\'"),
-                Pitch.new_from_lilypond_notation("f\'\'"),
-            ],
-            Dynamic.P,
-            [flugelhorns[0]],
-            max_playing=1
-        ),
-
-        "flugelhorns2": Line(
-            [
-                Pitch.new_from_lilypond_notation("a\'"),
-                Pitch.new_from_lilypond_notation("b\'"),
-            ],
-            Dynamic.P,
-            [flugelhorns[1]],
-            max_playing=1
-        ),
-
-        "flugelhorns3": Line(
-            [
-                Pitch.new_from_lilypond_notation("as\'"),
-                Pitch.new_from_lilypond_notation("ges\'"),
-            ],
-            Dynamic.P,
-            [flugelhorns[2]],
-            max_playing=0
-        ),
-
-        "altsaxes": Line(
-            [
-                Pitch.new_from_lilypond_notation("a"),
-                Pitch.new_from_lilypond_notation("b"),
-            ],
-            Dynamic.P,
-            [altsaxes],
-            max_playing=2
-        ),
-
-        "euphoniums": Line(
-            [
-                Pitch.new_from_lilypond_notation("es"),
-                Pitch.new_from_lilypond_notation("b,"),
-            ],
-            Dynamic.P,
-            [euphoniums],
-            max_playing=1
-        ),
-
-        "trombones": Line(
-            [
-                Pitch.new_from_lilypond_notation("b,"),
-                Pitch.new_from_lilypond_notation("a,"),
-            ],
-            Dynamic.MF,
-            [trombones],
-        ),
-
-        "horns": Line(
-            [
-                Pitch.new_from_lilypond_notation("bes"),
-                Pitch.new_from_lilypond_notation("es"),
-                Pitch.new_from_lilypond_notation("d"),
-                Pitch.new_from_lilypond_notation("as")
-            ],
-            Dynamic.P,
-            [horns]
-        )
+        # TODO
     }
 
     piece = Piece(70, (4,4), NUM_MEASURES, None, lines.values())
