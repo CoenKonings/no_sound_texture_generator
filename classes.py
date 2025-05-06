@@ -640,6 +640,10 @@ class Dynamic:
         elif self.is_changing:
             self.stop_change()
 
+        if time == 0:
+            self.value = target
+            self.parent.handle_dynamics()
+
         if self.value != target:
             self.is_changing = True
             self.target_dynamic = target
@@ -793,8 +797,7 @@ class Instrument:
         self.instrument_group.num_playing += 1
         self.pitch = self.instrument_group.texture.get_pitch()
 
-
-        if not self.dynamic:
+        if self.dynamic is None:
             self.dynamic = Dynamic(Dynamic.PPP, self)
             self.handle_dynamics()
 
@@ -936,6 +939,16 @@ class Instrument:
         with open(f'{folder_name}/{filename}', 'w+') as file:
             file.write(lilypond_score)
 
+    def add_dynamic_event(self):
+        lilypond = self.dynamic.as_lilypond()
+
+        if lilypond not in ["\\<", "\\>"]:
+            for x in ["\\ppp", "\\pp", "\\p", "\\mp", "\\mf", "\\f", "\\ff", "\\fff"]:
+                if x in self.events:
+                    self.events.remove(x)
+
+        self.add_note_event(self.dynamic.as_lilypond())
+
     def handle_dynamics(self):
         """
         Handle dynamics changes etc. by tracking them in LilyPond notes.
@@ -954,7 +967,7 @@ class Instrument:
                 self.instrument_group.texture.piece.time
             )
         else:
-            self.add_note_event(self.dynamic.as_lilypond())
+            self.add_dynamic_event()
 
     def add_note_event(self, event, place_before=False):
         """
@@ -1343,14 +1356,12 @@ class Line(Texture):
         for instrument in instrument_group.instruments:
             instrument.step(self.instrument_step, should_start_new_measure)
 
-        if instrument_group.should_start_playing():
-            for instrument in instrument_group.instruments:
+        for instrument in instrument_group.instruments:
+            if instrument_group.should_start_playing():
                 if instrument.can_start_playing():
                     instrument.start_playing()
                     instrument.step(self.instrument_step, False, True)
                     instrument_group.time_since_start = 0
-                    # Break to stagger start times
-                    break
 
     def instrument_step(self, instrument):
         """

@@ -72,13 +72,24 @@ if __name__ == "__main__":
             max_playing=1
         ),
 
+        "flugelhorns3": Line(
+            [
+                Pitch.new_from_lilypond_notation("as\'"),
+                Pitch.new_from_lilypond_notation("ges\'"),
+            ],
+            Dynamic.P,
+            [flugelhorns[2]],
+            max_playing=0
+        ),
+
         "altsaxes": Line(
             [
-                Pitch.new_from_lilypond_notation("ges")
+                Pitch.new_from_lilypond_notation("a"),
+                Pitch.new_from_lilypond_notation("b"),
             ],
             Dynamic.P,
             [altsaxes],
-            max_playing=1
+            max_playing=2
         ),
 
         "euphoniums": Line(
@@ -96,8 +107,19 @@ if __name__ == "__main__":
                 Pitch.new_from_lilypond_notation("b,"),
                 Pitch.new_from_lilypond_notation("a,"),
             ],
-            Dynamic.F,
+            Dynamic.MF,
             [trombones],
+        ),
+
+        "horns": Line(
+            [
+                Pitch.new_from_lilypond_notation("bes"),
+                Pitch.new_from_lilypond_notation("es"),
+                Pitch.new_from_lilypond_notation("d"),
+                Pitch.new_from_lilypond_notation("as")
+            ],
+            Dynamic.P,
+            [horns]
         )
     }
 
@@ -107,19 +129,48 @@ if __name__ == "__main__":
         texture.link_rest_time_to_dynamic([0.125, 2])
 
     events = [
-        # MusicEvent(2, lines["sopsaxes"].set_density, [2]),
+        MusicEvent(2, lines["altsaxes"].set_density, [4]),
         MusicEvent(2, lines["flugelhorns1"].set_density, [2]),
         MusicEvent(4.5, lines["flugelhorns1"].set_density, [3]),
         MusicEvent(4.5, lines["flugelhorns1"].set_max_playing, [2]),
         MusicEvent(6.5, lines["flugelhorns1"].add_pitch, [Pitch.new_from_lilypond_notation("d\'\'")]),
+        MusicEvent(8, lines["altsaxes"].dynamic.start_change, [Dynamic.MF, 11]),
         MusicEvent(8.5, lines["flugelhorns2"].set_max_playing, [2]),
         MusicEvent(8.5, lines["flugelhorns2"].set_density, [3]),
-        MusicEvent(9.5, lines["altsaxes"].set_density, [1]),
+        MusicEvent(9.5, lines["altsaxes"].add_pitch, [Pitch.new_from_lilypond_notation("ges")]),
+        MusicEvent(9.5, lines["altsaxes"].set_density, [4]),
+        MusicEvent(10, lines["flugelhorns1"].dynamic.start_change, [Dynamic.MF, 9]),
+        MusicEvent(11, lines["flugelhorns2"].set_density, [4]),
+        MusicEvent(11, lines["flugelhorns2"].set_max_playing, [3]),
+        MusicEvent(11, lines["flugelhorns1"].add_pitch, [Pitch.new_from_lilypond_notation("bes\'")]),
         MusicEvent(11.5, lines["euphoniums"].set_density, [2]),
+        MusicEvent(12, lines["flugelhorns2"].dynamic.start_change, [Dynamic.MF, 7]),
+        MusicEvent(12, lines["euphoniums"].dynamic.start_change, [Dynamic.MF, 7]),
         MusicEvent(13, lines["trombones"].set_fade_time, [0]),
         MusicEvent(13, lines["trombones"].set_density, [4]),
         MusicEvent(13, lines["trombones"].set_max_playing, [4]),
+        MusicEvent(13, lines["horns"].set_density, [6]),
+        MusicEvent(13, lines["horns"].set_max_playing, [3]),
+        MusicEvent(13, lines["horns"].dynamic.start_change, [Dynamic.MF, 7]),
+        MusicEvent(13.25, lines["trombones"].dynamic.start_change, [Dynamic.P, 1]),
         MusicEvent(13.5, lines["trombones"].set_fade_time, [0.5]),
+        MusicEvent(13.5, lines["trombones"].add_pitch, [Pitch.new_from_lilypond_notation("as,")]),
+        MusicEvent(15, lines["trombones"].dynamic.start_change, [Dynamic.MF, 4]),
+        MusicEvent(15, lines["trombones"].set_density, [3]),
+        MusicEvent(15, lines["euphoniums"].set_density, [4]),
+        MusicEvent(15, lines["euphoniums"].set_max_playing, [3]),
+        MusicEvent(15, lines["euphoniums"].add_pitch, [Pitch.new_from_lilypond_notation("as,")]),
+        MusicEvent(15, lines["euphoniums"].add_pitch, [Pitch.new_from_lilypond_notation("ges,")]),
+        MusicEvent(16, lines["flugelhorns3"].set_density, [3]),
+        MusicEvent(16, lines["flugelhorns3"].set_max_playing, [2]),
+        MusicEvent(16, lines["flugelhorns3"].dynamic.start_change, [Dynamic.MF, 3]),
+        MusicEvent(16, lines["sopsaxes"].set_density, [2]),
+        MusicEvent(16, lines["sopsaxes"].set_max_playing, [2]),
+        MusicEvent(16, lines["sopsaxes"].dynamic.start_change, [Dynamic.MF, 3]),
+    ]
+
+    events += [
+        MusicEvent(19, line.set_fade_time, [0.25]) for line in lines.values()
     ]
 
     piece.events = events
