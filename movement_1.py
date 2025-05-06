@@ -2,6 +2,9 @@ import sys
 from classes import *
 
 
+FOLDER_NAME = '../no_sound_lilypond/notes/movement-1'
+
+
 """
 TODO:
 Overgebonden (kwart)noten vaak niet nodig
@@ -399,7 +402,7 @@ if __name__ == "__main__":
     # Movement 2
 
     piece.start()
-    piece.encode_lilypond(remove_trailing_empty_measures=False)
+    piece.encode_lilypond(FOLDER_NAME, remove_trailing_empty_measures=True)
 
     print(f'Number of instruments: {piece.get_num_instruments()}')
     print(f'Mvmt. 1 pt. 1 length: 29 measures ({round(piece.measures_to_seconds(29))} seconds)')

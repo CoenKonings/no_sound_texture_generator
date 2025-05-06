@@ -19,8 +19,6 @@ pp = pprint.PrettyPrinter(indent=4)
 
 # Globals to easily edit some parameters.
 TIMESTEP = 0.125  # TODO: move to Piece class
-# FOLDER_NAME = '../no_sound_lilypond/notes/movement-1'  # TODO: move to Piece.encode_lilypond parameter
-FOLDER_NAME = '../no_sound_lilypond/notes/movement-2'
 # FOLDER_NAME = None
 DEBUG_MODE = False
 SHOW_WARNINGS = False
@@ -920,22 +918,22 @@ class Instrument:
 
         return "".join(varname_list) + "notes"
 
-    def encode_lilypond(self):
+    def encode_lilypond(self, folder_name):
         print(f'\x1b[2KEncoding score for {self.name} in lilypond...', end="\r")
         time.sleep(0.05)
         filename = self.name.replace(" ", "") + ".ly"
         lilypond_score = ""
-        lilypond_score += "{" if FOLDER_NAME is not None else ""
+        lilypond_score += "{" if folder_name is not None else ""
         lilypond_score += self.score.encode_lilypond()
-        lilypond_score += "}\n" if FOLDER_NAME is not None else "\n"
+        lilypond_score += "}\n" if folder_name is not None else "\n"
 
-        if FOLDER_NAME is None:
+        if folder_name is None:
             print()
             print(lilypond_score)
             print("------------------------------")
             return
 
-        with open(f'{FOLDER_NAME}/{filename}', 'w+') as file:
+        with open(f'{folder_name}/{filename}', 'w+') as file:
             file.write(lilypond_score)
 
     def handle_dynamics(self):
@@ -1052,9 +1050,9 @@ class InstrumentGroup:
     def set_texture(self, texture):
         self.texture = texture
 
-    def encode_lilypond(self):
+    def encode_lilypond(self, folder_name):
         for instrument in self.instruments:
-            instrument.encode_lilypond()
+            instrument.encode_lilypond(folder_name)
 
     def add_note_event(self, event, place_before=False):
         """
@@ -1108,7 +1106,8 @@ class Texture:
             dynamic,
             instrument_groups,
             piece=None,
-            max_playing=1
+            max_playing=1,
+            density=0
         ):
         self.pitches = pitches
         self.piece = piece
@@ -1118,10 +1117,11 @@ class Texture:
 
         self.instrument_group_index = 0
         self.instrument_groups[0].max_playing = self.max_playing
-        self.density = 0
 
         for instrument_group in self.instrument_groups:
             instrument_group.set_texture(self)
+
+        self.set_density(density)
 
     def __str__(self):
         return "[Texture]"
@@ -1224,9 +1224,9 @@ class Texture:
     def get_pitch(self, *_):
         raise Exception(f'Texture {self} get_pitch not implemented.')
 
-    def encode_lilypond(self):
+    def encode_lilypond(self, folder_name):
         for instrument_group in self.instrument_groups:
-            instrument_group.encode_lilypond()
+            instrument_group.encode_lilypond(folder_name)
 
     def handle_dynamics(self):
         raise Exception("Texture handle_dynamics not implemented.")
@@ -1320,10 +1320,11 @@ class Line(Texture):
             max_playing=1,
             change_rate=0,
             rest_time=0.5,
-            fade_time=0.5
+            fade_time=0.5,
+            density=0
         ):
 
-        super().__init__(pitches, dynamic, instrument_groups, piece, max_playing)
+        super().__init__(pitches, dynamic, instrument_groups, piece, max_playing, density=density)
         self.change_rate = change_rate
         self.rest_time = rest_time
         self.fade_time = fade_time
@@ -1375,7 +1376,8 @@ class Line(Texture):
 
         super().step(should_start_new_measure)
 
-
+    def add_pitch(self, pitch):
+        self.pitches.insert(0, pitch)
 
     def get_pitch(self):
         """
@@ -1454,6 +1456,9 @@ class Line(Texture):
     def set_rest_time(self, rest_time):
         self.manual_rest_time = True
         self.rest_time = rest_time
+
+    def set_fade_time(self, fade_time):
+        self.fade_time = fade_time
 
 
     def link_rest_time_to_dynamic(self, range):
@@ -1553,9 +1558,9 @@ class Piece:
         for texture in self.textures:
             texture.remove_measures_from_end(num_trailing_empty_measures)
 
-    def encode_lilypond(self, remove_trailing_empty_measures=False):
-        if FOLDER_NAME is not None:
-            Path(FOLDER_NAME).mkdir(exist_ok=True)
+    def encode_lilypond(self, folder_name, remove_trailing_empty_measures=False):
+        if folder_name is not None:
+            Path(folder_name).mkdir(exist_ok=True)
 
         print("Encoding piece in LilyPond...")
 
@@ -1563,7 +1568,7 @@ class Piece:
             self.remove_trailing_empty_measures()
 
         for texture in self.textures:
-            texture.encode_lilypond()
+            texture.encode_lilypond(folder_name)
 
         print("\x1b[2K\rLilyPond encoding finished.")
 
