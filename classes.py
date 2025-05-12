@@ -139,7 +139,7 @@ class Pitch:
                       "bes", "b", "r"]
     C, DES, D, ES, E, F, GES, G, AS, A, BES, B, REST = 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, -1
 
-    def __init__(self, note, octave):
+    def __init__(self, note, octave, is_invisible_rest=False):
         """
         Initialize a new Pitch.
 
@@ -148,6 +148,7 @@ class Pitch:
         """
         self.note = note
         self.octave = octave
+        self.is_invisible_rest = is_invisible_rest
 
     def new_from_lilypond_notation(lilypond_note):
         octave = 4  # Octave number for small octave
@@ -244,6 +245,8 @@ class Pitch:
 
         @returns:   A string representing this Pitch in LilyPond notation.
         """
+        note = "s" if self.is_invisible_rest else Pitch.NOTE_NAMES[self.note]
+
         return Pitch.NOTE_NAMES[self.note] + self.octave_to_lilypond()
 
     def is_rest(self):
@@ -1138,6 +1141,9 @@ class Texture:
             instrument_group.set_texture(self)
 
         self.set_density(density)
+        # Track dynamics of this texture
+        self.score = LilyPondScore()
+        self.dynamic_events = []
 
     def __str__(self):
         return "[Texture]"
@@ -1227,6 +1233,12 @@ class Texture:
                 should_start_new_measure
             )
 
+        if should_start_new_measure:
+            self.score.new_measure()
+
+        self.score.get_last_measure().add_note(Pitch(Pitch.REST, 0, is_invisible_rest=True), self.dynamic_events, [])
+        self.dynamic_events = []
+
     def instrument_group_step(self, instrument_group, should_start_new_measure):
         raise Exception(
             f'Texture {self} instrument_group_step not implemented.'
@@ -1241,11 +1253,47 @@ class Texture:
         raise Exception(f'Texture {self} get_pitch not implemented.')
 
     def encode_lilypond(self, folder_name):
+        score = "{" if folder_name is not None else ""
+        score += self.score.encode_lilypond()
+        score += "}\n" if folder_name is not None else ""
+
         for instrument_group in self.instrument_groups:
             instrument_group.encode_lilypond(folder_name)
 
+            if folder_name is not None:
+                with open(folder_name + "/group_scores/" + instrument_group.name + ".ly", "+w") as file:
+                    file.write(score)
+
+
     def handle_dynamics(self):
-        raise Exception("Texture handle_dynamics not implemented.")
+        """
+        Handle dynamics changes etc. by tracking them in LilyPond notes.
+        """
+        if (
+            self.dynamic.start_dynamic is not None and
+            self.dynamic.start_dynamic == self.dynamic.value and
+            not self.dynamic.is_changing
+        ):
+            self.score.remove_hairpin(
+                self.dynamic.change_start_time,
+                self.instrument_group.texture.piece.time
+            )
+        else:
+            self.track_dynamics()
+
+    def track_dynamics(self):
+        """
+        Track the dynamics of the current timestep by adding them to the
+        dynamic_events list.
+        """
+        lilypond = self.dynamic.as_lilypond()
+
+        if lilypond not in ["\\<", "\\>"]:
+            for x in ["\\ppp", "\\pp", "\\p", "\\mp", "\\mf", "\\f", "\\ff", "\\fff"]:
+                if x in self.events:
+                    self.events.remove(x)
+
+        self.dynamic_events.append(lilypond)
 
     def add_note_event(self, event, place_before=False):
         """
@@ -1589,6 +1637,7 @@ class Piece:
     def encode_lilypond(self, folder_name, remove_trailing_empty_measures=False):
         if folder_name is not None:
             Path(folder_name).mkdir(exist_ok=True)
+            Path(folder_name + "/group_scores").mkdir(exist_ok=True)
 
         print("Encoding piece in LilyPond...")
 
