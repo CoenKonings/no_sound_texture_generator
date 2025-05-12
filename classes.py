@@ -995,6 +995,9 @@ class Instrument:
     def remove_measures_from_end(self, num_measures):
         self.score.remove_measures_from_end(num_measures)
 
+    def set_max_note_length(self, max_note_length):
+        self.max_note_length = max_note_length
+
 
 class InstrumentGroup:
     def __init__(
@@ -1374,16 +1377,26 @@ class Line(Texture):
         if instrument.should_stop():
             instrument.stop_playing()
 
+    def set_rest_time_from_dynamic(self):# Interpolate rest time from range based on dynamic.
+        if self.dynamic.value <= self.dynamic_range_for_rest_time[0]:
+            self.rest_time = self.rest_time_range[0]
+            return
+        elif self.dynamic.value >= self.dynamic_range_for_rest_time[1]:
+            self.rest_time = self.rest_time_range[1]
+            return
+
+        dynamic_diff = self.dynamic.value - self.dynamic_range_for_rest_time[0]
+        scaled_dynamic = dynamic_diff / self.dynamic_range_for_rest_time[1]
+        rest_range_diff = self.rest_time_range[1] - self.rest_time_range[0]
+        scaled_rest_time = scaled_dynamic * rest_range_diff
+        scaled_rest_time += self.rest_time_range[0]
+        rounded_rest_time = round(scaled_rest_time / TIMESTEP) * TIMESTEP
+        self.rest_time = rounded_rest_time
+
 
     def step(self, should_start_new_measure):
         if not self.manual_rest_time:
-            # Interpolate rest time from range based on dynamic.
-            scaled_dynamic = self.dynamic.value / Dynamic.FFF
-            rest_range_diff = self.rest_time_range[1] - self.rest_time_range[0]
-            scaled_rest_time = scaled_dynamic * rest_range_diff
-            scaled_rest_time += self.rest_time_range[0]
-            rounded_rest_time = round(scaled_rest_time / TIMESTEP) * TIMESTEP
-            self.rest_time = rounded_rest_time
+            self.set_rest_time_from_dynamic()
 
         super().step(should_start_new_measure)
 
@@ -1471,10 +1484,14 @@ class Line(Texture):
     def set_fade_time(self, fade_time):
         self.fade_time = fade_time
 
-
-    def link_rest_time_to_dynamic(self, range):
+    def link_rest_time_to_dynamic(
+            self,
+            range,
+            between_range=(Dynamic.PPP, Dynamic.FFF)
+        ):
         self.manual_rest_time = False
         self.rest_time_range = range
+        self.dynamic_range_for_rest_time = between_range
 
     def set_pitches(self, pitches):
         self.pitches = pitches
