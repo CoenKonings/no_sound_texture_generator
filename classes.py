@@ -1290,8 +1290,8 @@ class Texture:
 
         if lilypond not in ["\\<", "\\>"]:
             for x in ["\\ppp", "\\pp", "\\p", "\\mp", "\\mf", "\\f", "\\ff", "\\fff"]:
-                if x in self.events:
-                    self.events.remove(x)
+                if x in self.dynamic_events:
+                    self.dynamic_events.remove(x)
 
         self.dynamic_events.append(lilypond)
 
@@ -1484,6 +1484,8 @@ class Line(Texture):
                             self.dynamic.value,
                             self.fade_time
                         )
+
+        super().handle_dynamics()
 
     def split_instrument_groups(self):
         if len(self.instrument_groups) == 1:
