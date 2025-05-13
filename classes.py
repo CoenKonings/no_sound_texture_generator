@@ -3,8 +3,8 @@ Contains all classes needed to generate the LilyPond notation of the textures
 in No Sound, a WIP piece for fanfare orchestra.
 
 TODO
+- Track dynamics for instrument groups
 - Cleanup (refer to TODOs dotted throughout this file)
-- Implement semitone cluster texture.
 """
 
 import math
