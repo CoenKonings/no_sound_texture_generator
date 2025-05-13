@@ -315,6 +315,7 @@ class LilyPondNote:
         if self.has_tie() and not note.has_tie():
             self.remove_tie()
 
+        # Prevent double ties
         if note.has_tie():
             note.remove_tie()
 
@@ -1505,6 +1506,8 @@ class Line(Texture):
             new_line.pitches = deepcopy(self.pitches)
             instrument_group.texture = new_line
             new_line.piece.textures.append(new_line)
+            new_line.score = deepcopy(self.score)
+            new_line.dynamic_events = copy(self.dynamic_events)
             new_line.set_density(
                 min(new_line.density, new_line.largest_instrument_group_size())
             )
